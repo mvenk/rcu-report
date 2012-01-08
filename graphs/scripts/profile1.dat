@@ -1,0 +1,20 @@
+=table
+=stacked;Master::check_driver;click.ReadWriteLockUser::acquire_read;RouterThread::lock_tasks;other
+colors=yellow,blue,black,grey4,grey6,grey7,white
+yformat=%g
+max=100
+fontsz=10
+=norotate
+title=Distribution of time spent using reader-writer lock lock synchronization.
+ylabel=%time
+legendx=right
+legendy=top
+
+# Master::check_driver click.ReadWriteLockUser::acquire_read RouterThread::lock_tasks other
+1r_1w 0 9.4 82.8 7.8
+2r_1w 18.2 28.0 50.0 3.8
+3r_1w 5.2 61.9 31.4 1.5
+4r_1w 3.2 71.7 24.2 .9
+5r_1w 0.5 78.7 19.9 .9
+6r_1w 1.2 81.5 16.4 .9
+7r_1w 0.5 84.8 14.0 .7

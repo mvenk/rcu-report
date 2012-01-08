@@ -1,0 +1,18 @@
+In general it is important that you come up with a good abstract. I suggest first doing an outline, even for the abstract. Have you done outlines before? A typical outline for an abstract might be:
+
+I. Goal/Problem domain (here, fast routing lookups on multicore software routers)
+IA. Importance of problem domain (here, that high performance routing lookups are critically important for forwarding performance; and that multicore systems are prevalent and the main way performance will improve in future)
+II. Challenges (here, multicore is difficult to get simultaneously correct and fast)
+III. Solution approach (here, Read-Copy Update)
+IV. Accomplishments (brief overview of what you did)
+V. Results (specific numbers)
+
+
+
+
+\section*{Acknowledgements}
+I am grateful to Rohit Krishna Kumar for insightful discussions, sections of code, comments and help in writing this document.
+
+
+High Performance routing lookups are critically important for forwarding performance. With multicore systems becoming more popular and more prevalent, leveraging them is key to improving performance. However, it is difficult to obtain a simultaneously correct, scalable and fast thread-safe solution. 
+     We have described an approach for providing thread-safety using Read Copy Update. We have verified that we incur low read side overhead and that our approach performs up to 80% better than reader-writer locks on read-intensive workloads.

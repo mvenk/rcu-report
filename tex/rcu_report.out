@@ -1,0 +1,26 @@
+\BOOKMARK [1][-]{section.1}{Abstract}{}
+\BOOKMARK [1][-]{section.2}{Introduction}{}
+\BOOKMARK [1][-]{section.3}{Related Work}{}
+\BOOKMARK [1][-]{section.4}{Background}{}
+\BOOKMARK [2][-]{subsection.4.1}{An overview of RadixIPLookup}{section.4}
+\BOOKMARK [3][-]{subsubsection.4.1.1}{The Radix Tree}{subsection.4.1}
+\BOOKMARK [3][-]{subsubsection.4.1.2}{The Vector class}{subsection.4.1}
+\BOOKMARK [1][-]{section.5}{The Problem}{}
+\BOOKMARK [2][-]{subsection.5.1}{Updater-Updater Conflicts}{section.5}
+\BOOKMARK [2][-]{subsection.5.2}{Reader-Updater Conflicts}{section.5}
+\BOOKMARK [1][-]{section.6}{The Solution}{}
+\BOOKMARK [2][-]{subsection.6.1}{Coarse-grained locking}{section.6}
+\BOOKMARK [2][-]{subsection.6.2}{Fine-grained locking}{section.6}
+\BOOKMARK [2][-]{subsection.6.3}{Using Read Copy Update in Click}{section.6}
+\BOOKMARK [2][-]{subsection.6.4}{RCU using Timers}{section.6}
+\BOOKMARK [2][-]{subsection.6.5}{RCU using Click Scheduling Loop}{section.6}
+\BOOKMARK [2][-]{subsection.6.6}{Performance Hypothesis}{section.6}
+\BOOKMARK [1][-]{section.7}{Performance Evaluation}{}
+\BOOKMARK [2][-]{subsection.7.1}{Experimental Setup}{section.7}
+\BOOKMARK [2][-]{subsection.7.2}{Micro-benchmarks}{section.7}
+\BOOKMARK [2][-]{subsection.7.3}{Macro-benchmarks}{section.7}
+\BOOKMARK [3][-]{subsubsection.7.3.1}{Pure Reader Workload}{subsection.7.3}
+\BOOKMARK [3][-]{subsubsection.7.3.2}{Read Intensive Workload}{subsection.7.3}
+\BOOKMARK [1][-]{section.8}{Conclusion}{}
+\BOOKMARK [1][-]{section.9}{Future Work}{}
+\BOOKMARK [1][-]{section.10}{Acknowledgements}{}

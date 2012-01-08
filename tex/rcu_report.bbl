@@ -1,0 +1,36 @@
+\begin{thebibliography}{1}
+
+\bibitem{dobrescu}
+Mihai Dobrescu, Katerina Argyraki, Gianluca Iannaccone, Maziar Manesh, and
+  Sylvia Ratnasamy.
+\newblock Controlling parallelism in a multicore software router.
+\newblock In {\em Proceedings of the Workshop on Programmable Routers for
+  Extensible Services of Tomorrow}, PRESTO '10, pages 2:1--2:6, New York, NY,
+  USA, 2010. ACM.
+
+\bibitem{routebricks}
+Mihai Dobrescu, Norbert Egi, Katerina Argyraki, Byung-Gon Chun, Kevin Fall,
+  Gianluca Iannaccone, Allan Knies, Maziar Manesh, and Sylvia Ratnasamy.
+\newblock Routebricks: exploiting parallelism to scale software routers.
+\newblock In {\em Proceedings of the ACM SIGOPS 22nd symposium on Operating
+  systems principles}, SOSP '09, pages 15--28, New York, NY, USA, 2009. ACM.
+
+\bibitem{readcopyupdate}
+Dinakar Guniguntala, Paul~E. Mckenney, Josh Triplett, and Jonathan Walpole.
+\newblock The read-copy-update mechanism for supporting real-time applications
+  on shared-memory multiprocessor systems with linux.
+\newblock {\em IBM Systems Journal}, 47(2):221--236, 2008.
+
+\bibitem{radixiplookup}
+Eddie Kohler.
+\newblock Radixiplookup documentation.
+\newblock \url{http://read.cs.ucla.edu/click/elements/radixiplookup}.
+
+\bibitem{runtimepacketprocessing}
+Qiang Wu and Tilman Wolf.
+\newblock On runtime management in multi-core packet processing systems.
+\newblock In {\em Proceedings of the 4th ACM/IEEE Symposium on Architectures
+  for Networking and Communications Systems}, ANCS '08, pages 69--78, New York,
+  NY, USA, 2008. ACM.
+
+\end{thebibliography}

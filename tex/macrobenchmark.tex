@@ -1,0 +1,93 @@
+\subsection{Macro-benchmarks}
+
+
+The macrobenchmarks are designed to reflect a typical software
+router use case. Usually a router will encounter far more read requests
+(IP lookups) as compared to write requests (routing table updates)
+. To model this we consider pure reader workloads and workloads which are read
+intensive but have a lesser fraction of writes.
+
+We used a realistic routing table derived from the routeviews.org
+database. This table consists of 167,000 routes. We call this table
+the \emph{167k table}. The input set was generated randomly using the 167k router configuration. A reader task consisted of performing lookups for 100,000 inputs from this input set. An updater task involves replacing routes for 1000 routes in the input set. Each of the reader and updater threads execute 128 such tasks in a single run of the test.
+
+
+ The benchmarks involving only readers were run on the RCU version,
+ the reader-writer lock version and the vanilla version with no
+ locks. When there are updaters involved in the workload the benchmark was run on the RCU version and the reader-writer lock version. We cannot run the workload with writers on the vanilla version since it is not thread safe.  The machine used for the benchmarks has the configuration shown in Table
+ \ref{tbl:machinemac}.
+
+
+**Machine Characteristics - will be moved up once microbenchmarks are
+run on the same machine
+
+\begin{table}
+\begin{center}
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline Feature & Value\\
+\hline CPU &Intel(R) Core(TM) i7-2600 CPU @ 3.40GHz\\
+\hline Number of Cores & 8\\
+\hline Operating System & Mac OS X 10.7.2 11C74\\
+\hline Cache-line size & 64 bytes\\
+\hline L1 cache size (per-CPU) & 32 KB\\
+\hline L2 cache size (shared by 2 CPUs) & 256 KB\\
+\hline L3 cache size (shared by 8 CPUs)& 8 MB\\
+\hline Main memory size & 16 GB\\
+\hline
+\end{tabular}
+\end{center}
+\label{tbl:machinemac}
+\caption{Machine Characteristics.}
+\end{table}
+
+\paragraph{Pure Reader Workload}
+ We first look at a workload consisting of only readers. The results are shown in Figure \ref{chart:167kreader} and Table \ref{tbl:167kreader}.
+\\\\ 
+\begin{table}[tph]
+\begin{center}
+\input{167kreader.tex}
+\end{center}
+\label{tbl:167kreader}
+\caption{Performance comparison over a pure reader workload.}
+\end{table}
+\begin{figure}[tph]
+\includegraphics[scale = 0.8]{graphs/macro_reader_100k.eps}
+\caption{Performance of increasing number of readers using the 167k routing table.}
+\label{chart:167kreader}
+\end{figure}
+
+From Figure \ref{chart:167kreader}, we see that RCU scales much better than the reader-writer lock version. RCU is always within $1.6$ times the vanilla version. Time taken by the reader-writer lock increases linearly and is up to $31$ times slower than the version without locks.
+
+These results validate our claim that RCU is wait-free and lock-free for readers. In the RCU version readers do not create any synchronization overhead. Readers in the reader-writer lock version update a shared lock variable before they access the routing table. The state of the shared variable needs to be updated through all cores. As the number of threads increases the contention causes cache line bouncing and increased usage of the processor bus bandwidth. Thus we see a linear increase in time as the number of readers increase. **Justify with profiling measurements.
+
+\paragraph{Read Intensive Workload}
+We also conducted a benchmark which consisted of one updater and an increasing number of readers. The results are shown in Figure \ref{chart:167kwriter} and Table \ref{tbl:167kwriter}.
+
+\begin{table}[tph]
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline Workload &Reader-Writer Lock (s) & RCU (s) \\
+\hline 1 reader(s), 1 writer(s) & 2.280 & 1.550\\
+\hline 2 reader(s), 1 writer(s) & 3.053 & 1.563\\
+\hline 3 reader(s), 1 writer(s) & 7.520 & 1.617\\
+\hline 4 reader(s), 1 writer(s) & 10.490 & 1.697\\
+\hline 5 reader(s), 1 writer(s) & 14.307 & 1.783\\
+\hline 6 reader(s), 1 writer(s) & 18.200 & 1.857\\
+\hline 7 reader(s), 1 writer(s) & 22.553 & 2.373\\
+\hline
+\end{tabular}
+\end{center}
+\label{tbl:167kwriter}
+\caption{Performance comparison of readers with one writer.}
+\end{table}
+
+
+\begin{figure}[tph]
+\includegraphics[scale = 0.8]{graphs/macro_writer_100k.eps}
+\caption{Performance of increasing number of readers and one writer with the 167k routing table.}
+\label{chart:167kwriter}
+\end{figure}
+ 
+We see from Figure \ref{chart:167kwriter} that RCU scales far better than the reader-writer lock. Time taken by the reader-writer lock increases linearly with the number of threads. The reader-writer lock version is over nine times slower than the RCU version for the workload consisting of 7 readers and 1 writer. Thus we see that RCU outperforms the reader-writer lock for a read intensive workload with lesser updates.
+
+**Profile reader-writer lock and RCU. Then explain the linear increase in time taken by the reader-writer lock.

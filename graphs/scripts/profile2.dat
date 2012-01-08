@@ -1,0 +1,20 @@
+=table
+=stacked;Master::check_driver;ReadRadixIPLookupM106::run_task;RouterThread::lock_tasks;other
+colors=yellow,blue,black,grey4,grey6,grey7,white
+yformat=%g
+max=100
+fontsz=10
+=norotate
+title=Distribution of time spent using RCU lock synchronization.
+ylabel=%time
+legendx=right
+legendy=top
+
+# Master::check_driver ReadRadixIPLookupM106::run_task RouterThread::lock_tasks other
+1r_1w 0.1 1.9 90.2 7.8
+2r_1w 30.1 1.4 61.1 7.4
+3r_1w 0.2 5.5 84.0 10.3
+4r_1w 0.2 7.0 83.2 9.6
+5r_1w 3.5 10.5 77.1 8.9
+6r_1w 4.2 10.7 76.4 8.7
+7r_1w 0.3 11.3 81.4 7.0
