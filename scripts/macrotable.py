@@ -25,19 +25,19 @@ out.write ("\hline Workload &")
 if(vanilla): 
     out.write ("No Locks (s) &")
 out.write ("Reader-Writer Lock (s) & RCU (s) \\\\\n")
-for i in range(0,size,1):
-    wrk = rcu[i].split(' ')[0].replace("r"," reader(s)").replace("w"," writer(s)")
+for i in range(1,size,1):
+    wrk = rcu[i].split('_')[0].replace("r"," reader(s)").replace("w"," writer(s)")
     out.write ("\hline ")
     out.write (wrk) # workload
     out.write (" & ")
     if(vanilla):
-        val = float(non[i].split(' ')[1].rstrip('\n'))
+        val = float(non[i].split(' ')[1].rstrip(','))
         out.write (format(val,".3f"))
         out.write (" & ")
-    val = float(rwl[i].split(' ')[1].rstrip('\n'))
+    val = float(rwl[i].split(' ')[1].rstrip(','))
     out.write (format(val,".3f"))
     out.write (" & ")
-    val  = float(rcu[i].split(' ')[1].rstrip('\n'))
+    val  = float(rcu[i].split(' ')[1].rstrip(','))
     out.write (format(val,".3f"))
     out.write ("\\\\\n")
 
