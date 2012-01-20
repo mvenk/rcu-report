@@ -17,16 +17,30 @@ if(vanilla):
 
 size = len(rcu)
 out = open(outfile,'w')
-out.write ("\\begin{table}[tph]\n\
-\\begin{center}\n\
-\\begin{tabular}{|l|l|l|l|}\n")
-
+if(vanilla):
+    out.write ("\\begin{tabular}{|l|l|l|l|l|l|}\n")
+else:
+    out.write ("\\begin{tabular}{|l|l|l|l|l|}\n")
+    
 out.write ("\hline Workload &")
 if(vanilla): 
     out.write ("No Locks (s) &")
-out.write ("Reader-Writer Lock (s) & RCU (s) \\\\\n")
+out.write ("Reader-Writer Lock (Time in s) & RCU (Time in s) & ")
+if(vanilla):
+    out.write("$\\frac{\mbox{Reader-Writer Lock}}{\mbox{Vanilla}}$ & $\\frac{\mbox{RCU}}{\mbox{Vanilla}} \\\\\n")
+else:
+    out.write("$\\frac{\mbox{Reader-Writer Lock}}{\mbox{RCU}} $ \\\\\n")
+    
 for i in range(1,size,1):
-    wrk = rcu[i].split('_')[0].replace("r"," reader(s)").replace("w"," writer(s)")
+    if(int(rcu[i].split('_')[1].split('r')[0])==1):
+        str1=rcu[i].split('_')[1].replace("r"," reader")
+    else:
+        str1=rcu[i].split('_')[1].replace("r"," readers")
+    if(int(rcu[i].split('_')[2].split(' ')[0].split('w')[0])==1):
+        str2=rcu[i].split('_')[2].split(' ')[0].replace("w"," writer")
+    else:
+        str2=rcu[i].split('_')[2].split(' ')[0].replace("w"," writers")
+    wrk = str1 + " " + str2 
     out.write ("\hline ")
     out.write (wrk) # workload
     out.write (" & ")
@@ -34,18 +48,23 @@ for i in range(1,size,1):
         val = float(non[i].split(' ')[1].rstrip(','))
         out.write (format(val,".3f"))
         out.write (" & ")
-    val = float(rwl[i].split(' ')[1].rstrip(','))
-    out.write (format(val,".3f"))
+    rwlval = float(rwl[i].split(' ')[1].rstrip(','))
+    out.write (format(rwlval,".3f"))
     out.write (" & ")
-    val  = float(rcu[i].split(' ')[1].rstrip(','))
-    out.write (format(val,".3f"))
+    rcuval  = float(rcu[i].split(' ')[1].rstrip(','))
+    out.write (format(rcuval,".3f"))
+    if(vanilla):
+        rcuo = (rcuval)/val
+        rwlo = (rwlval)/val
+        out.write("&" + format(rwlo,".3f") + "&" + format(rcuo,".3f"))
+    else:
+        better = (rwlval/rcuval)
+        out.write("&" +format(better,".3f"))
     out.write ("\\\\\n")
 
 out.write( "\\hline\n\
 \\end{tabular}\n\
-\\end{center}\n\
-\\label{tbl:writeintensive}\n\
-\\caption{Performance comparison over a pure reader workload}\n\
-\\end{table}\n")
+\\label{tbl:xyz}\n\
+")
 
 out.close()

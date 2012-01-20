@@ -678,11 +678,11 @@ From Figure \ref{chart:readintensive} see that the reader-writer lock does not s
 
 \paragraph{Write Intensive workloads}
 We now compare the performance of RCU over the reader-writer lock with a write intensive workload. Our goal was to improve performance over read intensive workloads, however we include this section for completeness and correctness. From Table \ref{tbl:writeintensive} and Figure \ref{chart:writeintensive}, we can see that time taken by RCU begins to climb and exceeds the time taken by the reader-writer lock. This could be due to the additional overhead of reclaiming stale data in quiescent states. When there are more writers, there is more stale data. 
-\\The percentage improvement column computes $\frac{RWLock - RCU}{RWLock}\times100$.
+\\The percentage improvement column computes .
 \begin{table}[tph]
 \begin{center}
 \begin{tabular}{|l|l|l|l|}
-\hline Workload & Reader-Writer Lock (s) & RCU (s) &	Percentage Improvement (\%)\\
+\hline Workload & Reader-Writer Lock (s) & RCU (s) & $\frac{RWLock - RCU}{RWLock}\times100$\\
 \hline 1 R, 1 W	& 1.3425 & 0.78	& 41.8994413407821\\
 \hline 2 R, 1 W	& 5.1025 & 0.945 & 81.4796668299853\\
 \hline 3 R, 1W & 8.535 & 1.975 & 76.8599882835384\\
@@ -761,10 +761,10 @@ run on the same machine**
 
 \begin{table}[tph]
 \begin{center}
-\input{167kreader.tex}
+\input{macro_vr_0w.tex}
 \end{center}
 \caption{Performance comparison over a pure reader workload.}
-\label{tbl:167kreader}
+\label{chart:167kreader}
 \end{table}
 
 \begin{figure}[tph]
