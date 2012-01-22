@@ -737,7 +737,7 @@ As with macro-benchmarks, we are interested mainly in read heavy workloads. We l
 \paragraph{Pure Reader Workload}
 Here we consider a workload consisting of only readers. We look at how the reader-writer lock and RCU perform against the unmodified vanilla version.
 As we can see from Table \ref{tbl:micro_vr_0w} which is represented in Figure \ref{img:micro_vr_0w}, the reader-writer lock is upto 50 times slower than a version without locks.
-The reader-writer lock does not scale with an increase in the number of threads. This can be seen clearly in Figure \ref{chart:readers_comparison}. The RCU version scales with the number of threads. The RCU version is also within 1.5 times the performance of the version without any locks.
+The reader-writer lock does not scale with an increase in the number of threads. The RCU version scales with an increase in the number of threads. The RCU version is also within 1.5 times the performance of the version without any locks.
 
 The Reader-Writer lock spends time acquiring a lock on reads while RCU does not have any additional overhead for readers. Any additional overhead of RCU over the vanilla version is due to the overhead in checking reclaim lists and detecting quiescent states.
 
@@ -747,14 +747,14 @@ The Click configuration file used for this purpose is shown in Listing \ref{lst:
 \input{micro_vr_0w.tex}
 \end{center}
 \label{tbl:micro_vr_0w}
-\caption{Performance comparison over workload with increasing number of readers and zero writers.}
+\caption{Performance comparison over a workload with increasing number of readers and zero writers.}
 \end{table}
 
 \begin{figure}[tph]
 \fbox{
-\includegraphics[scale = 0.4]{../images/graphs/micro_vr_0w}
+\includegraphics[scale = 0.6]{../images/graphs/micro_vr_0w}
 }
-\caption{Performance comparison over a pure reader workload}
+\caption{Performance comparison over a workload with increasing number of readers and zero writers.}
 \label{img:micro_vr_0w}
 \end{figure}
 
@@ -791,22 +791,22 @@ RCU scales over an increase in the number of threads, however the reader-writer 
 \begin{center}
 \input{micro_vr_1w.tex}
 \end{center}
-\label{tbl:micro_vr_1w}\ref{img:micro_vr_1w}
-\caption{Performance comparison of increasing number of writers with zero readers.}
+\label{tbl:micro_vr_1w}
+\caption{Performance comparison of increasing number of readers with one writer.}
 \end{table}
 
 \begin{figure}[tph]
 \begin{center}
 \fbox{
-\includegraphics[scale = 0.5]{../images/graphs/micro_vr_1w}
+\includegraphics[scale = 0.6]{../images/graphs/micro_vr_1w}
 }
-\caption{Performance comparison of increasing number of writers with zero readers.}
+\caption{Performance comparison of increasing number of readers with one writer.}
 \label{img:micro_vr_1w}
 \end{center}
 \end{figure}
 
 \paragraph{Write Intensive workloads}
-We now compare the performance of RCU with the reader-writer lock for a write intensive workload. Our goal is to improve performance over read intensive workloads, so we do not care much about the results of this workload. . Additional overhead caused due to contention of the lock to free stale data in quiescent states. When there are more writers, there is more stale data. Since these benchmarks target a very small set of routes, the reclamation also has contention for the same memory location.
+We now compare the performance of RCU with the reader-writer lock for a write intensive workload. The performance of a workload with one reader and increasing number of writers is shown in Table \ref{tbl:micro_1r_vw} and Figure \ref{img:micro_1r_vw}. The performance of a workload with zero readers and increasing number of writers is shown in Table \ref{tbl:micro_0r_vw} and Figure \ref{img:micro_0r_vw}. In both cases, the reader-writer lock performs better than RCU. We attribute this to additional overhead caused due to lock contention to free stale data in quiescent states. When there are more writers, there is more stale data. Since these benchmarks target a very small set of routes, the reclamation also has contention for the same memory locations.
 
 \begin{table}[tph]
 \begin{center}
@@ -847,25 +847,23 @@ We now compare the performance of RCU with the reader-writer lock for a write in
 
 \section{Conclusion}
 Lookup performance in a software router such as Click is crucially
-important. It becomes necessary to leverage the power of multicore
-processors which are available in almost all commodity hardware
-today. A fast and safe multicore solution is desirable and this
-document has outlined an efficient way to achieve it.\\
+important. Leveraging multicore processors which are available in almost all commodity hardware
+today is a feasible way to improve performance. This document has outlined an efficient way to achieve a fast and safe multicore solution.
 
-We have built an RCU framework for userlevel Click invlolving a
-mechanism to detect quiescent states and an API which can be used by
-any userlevel element. We have verified through our benchmarks that
-this mechanism does indeed have a very low reader side overhead
-(within 10\% of the original version). The RCU approach is also up to
-70\% better than a reader-writer lock on read intensive workloads.\\
 
 The primary challenges in implementing RCU for Click were to
 identify quiescent states in a way which can be applied to all
-elements. We accomplished this through the Click scheduling loop.\\
+elements. 
 
-Our analysis shows that RCU outperforms locking by a huge margin
-for read intensive workloads while being comparable to locking for an
-update intensive workload.
+We have built an RCU framework for userlevel Click invlolving a
+mechanism to detect quiescent states and an API which can be used by
+a userlevel element in Click.
+
+We have verified through our benchmarks that
+this mechanism does indeed have a very low reader side overhead
+(within two times the original version). The RCU approach is also up to
+70\% better than a reader-writer lock on read intensive workloads.
+
 \section{Future Work}
 \begin{enumerate}
 \item Implement RCU for RadixIPLookup if Radix nodes are deleted when a route is removed.
