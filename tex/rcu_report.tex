@@ -54,13 +54,14 @@ The ever-increasing volume of network traffic over the internet demands highly e
 \\\\ Commodity machines with SMP multi-core architectures are growing in popularity. A software modular router such as Click running on commodity machines  can benefit greatly by exploiting parallelism on multi-core architectures.
 \\\\ Building a scalable and safe multi-core application is not a trivial task. Shared data structures in a multi-threaded application require synchronization for safe and correct access. Synchronization introduces overheads which attenuate the benefits of parallelism. Locks ultimately have the effect of  serialization such that only one thread accesses shared data at a time. A solution using locks also invariably involves the use of variables to synchronize access. These variables need to be accessed simultaneously by other processes or threads causing \emph{cache line bouncing}. This refers to the overhead of communicating the shared value across multiple caches which is very expensive. The larger the number of threads, the larger is the frequency of access of synchronization variables and the larger is the cost of synchronization. The lock based approach becomes less scalable and hence less attractive. 
 \\\\ It becomes essential to carefully evaluate our context and design a multi-core, multi-threaded solution which is highly efficient. Our context involves a read intensive workload comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} \cite{readcopyupdate} scales efficiently on read intensive workloads and we seek to implement a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional lock-based approach using Click on a commodity machine. 
-\\\\ The rest of the document is organized as follows. Section 3 gives the reader a background on the userlevel Click elements we are concerned with. Section 5 explains the main problems which exist in the current implementation. Section 4 describes our solutions to the problem along with the implementation details. Sections 6 and 7 describe the performance hypotheses and analysis.
+\\\\ The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click elements we are concerned with. Section 5 explains the main problems which exist in the current implementation. Section 4 describes our solutions to the problem along with the implementation details. Sections 6 and 7 describe the performance hypotheses and analysis.
 \section{Related Work}
 \emph{Routebricks} \cite{routebricks} proposes an architecture which enables higher packet processing speeds by distributing router functionality across multiple servers and multiple cores within a server. Their approach involves load balancing through Valiant Load Balancing (VLB). Their method of achieving faster packet processing is at a coarser level of granularity when compared with our approach.
 \\\\ Multiple efforts have been made at exploiting parallelism in the packet-flow mechanism in a software router. Wu and Wolf \cite{runtimepacketprocessing} have designed a run-time system which distributes the allocation of processing tasks to processor cores. It also balances the workload and maps the it across multiple cores. This parallelism is done at a task-level granularity. It does not look at synchronization of objects being used by the task. In our work we attempt to allow the task itself to be thread-safe so that it can be run on multiple cores.
 \\\\ Dobrescu et al. \cite{dobrescu} have proposed a technique in which the packet-processing flow and server characteristics are taken as input to formulate an optimization problem. A compiler would then solve this problem and output machine code which will optimize for throughput. Our work could complement [5], since by creating a thread-safe solution, we eliminate dependencies within the elements. This means that we do not have to worry about the order of execution of tasks which share data.
 
 \section{Background}
+\label{sec:background}
 We seek to find a scalable way to run userlevel Click elements in a multithreaded environment. Our approach was to try our solutions on the \emph{RadixIPLookup} element. We then extend our solution to other elements in Click. This section presents a brief overview of the RadixIPLookup element.
 \subsection{An overview of RadixIPLookup}
 The \emph{RadixIPLookup} element \cite{radixiplookup} is a class which is used to perform IP lookups. It uses a radix trie to perform the lookups and a vector to store the routes. This structure is explained in further detail. 
@@ -128,6 +129,7 @@ As is the case with most Vector classes, the Vector class in click has an \_push
 \\\\ If \_n exceeds \_capacity, a call to reserve\_and\_push\_back() is made. This dynamically increases the size of the vector. The code for push\_back and reserve\_and\_push\_back() is given in the code-listing.
 
 \section{The Problem}
+\label{sec:problem}
 Our goal is to improve lookup performance by allowing for multithread access to Click elements. In this section we look at problems in the existing code and the key factors which hinder safe multithreaded access.
 \\\\The section is divided into unsafe access caused by multiple updaters (Updater-Updater Conflicts) and unsafe access caused by concurrent readers and updaters (Reader-Updater Conflicts). Concurrent updaters breed race conditions which might lead to an inconsistency in the data structures being used. A reader racing with an updater might read stale or invalid data.
 \subsection{Updater-Updater Conflicts}
@@ -570,57 +572,190 @@ In order to maintain epoch numbers we introduce a \emph{\_thread\_epoch} variabl
 RCU is known to work best for a reader-heavy workload with a small number of updaters.
 \\Our claim is that the RCU mechanism for click outlined above has almost zero reader-side overhead. Readers being lock-free and wait-free, we expect RCU performance to be comparable to the original version when there are only readers.
 \\Updaters acquire a lock, so there is some performance penalty in the presence of updaters. We expect the RCU performance for an update-intensive workload to be comparable to that of a Read-Write lock.
+
 \section{Performance Evaluation}
 \subsection{Experimental Setup}
-We analyzed the performance of our solutions on a commodity Dell Studio 15 machine. The characteristics of this machine is shown in Table \ref{tbl:machine}.
-\\In our tests, we used a shell scripts which runs each Click script for a specified number of iterations .The CPU time is the average system time over 20 iterations.
+We analyzed the performance of our solutions on a Mac machine with 8 cores whose configuration is shown in Table \ref{tbl:machinemac}.
+We used the CPU time reported by system utility \emph{/usr/bin/time} to measure performance.
+
+Macrobenchmarks in  \ref{sec:macrobenchmarks} evaluate the performance of RCU over a routing table consisting of roughly 167,000 routes. Microbenchmarks in \ref{sec:microbenchmarks} evaluate the performance of RCU with a over a small range of IP Addresses.
+
 \begin{table}
 \begin{center}
 \begin{tabular}{|l|l|l|l|l|l|}
 \hline Feature & Value\\
-\hline CPU & Intel(R) Core  i3-370M (2.4 GHz)\\
-\hline kernel & Linux 2.6.32-25-generic\\
-\hline cache-line size & 64 bytes\\
-\hline L1 cache size (per-cpu) & 32 KB\\
-\hline L2 cache size & 512 KB\\
-\hline L3 cache size & 3072 KB\\
+\hline CPU &Intel(R) Core(TM) i7-2600 CPU @ 3.40GHz\\
+\hline Number of Cores & 8\\
+\hline Operating System & Mac OS X 10.7.2 11C74\\
+\hline Cache-line size & 64 bytes\\
+\hline L1 cache size (per-CPU) & 32 KB\\
+\hline L2 cache size (shared by 2 CPUs) & 256 KB\\
+\hline L3 cache size (shared by 8 CPUs)& 8 MB\\
+\hline Main memory size & 16 GB\\
 \hline
 \end{tabular}
 \end{center}
-\label{tbl:machine}
-\caption{Machine Characteristics}
+\caption{Machine configuration.}
+\label{tbl:machinemac}
 \end{table}
 
-\subsection{Micro-benchmarks}
-The micro-benchmarks have tests which repeatedly access a small set of addresses in a very short time span. This was done by creating an element in Click which has a task of repeatedly reading a route. 
-\paragraph{Pure Reader Workload}
-We look at how the coarse-grained reader-writer lock and RCU perform against the unmodified version which runs only readers.
-The unmodified version which can run only readers is used as a base-line reference against the solutions we have experimented with.
-As we can see from Table \ref{tbl:readerwriter_nolocks} which is represented in Figure \ref{chart:readers_comparison}, the reader-writer lock is upto 13 times slower than a version without locks.
-The reader-writer lock does not scale with an increase in the number of threads. This can be seen clearly in Figure \ref{chart:readers_comparison}. The Click configuration file used for this purpose is shown in Listing \ref{lst:readercomparison}.
-\\ We also see that the RCU version scales with the number of threads. The RCU version is also within 15\% of the performance of the version without any locks.\\
+%% Macro benchmark sub-section
+\subsection{Macro-benchmarks}
+\label{sec:macrobenchmarks}
 
+The macrobenchmarks are designed to reflect a typical software router
+use case. Usually a router will encounter far more read requests (IP
+lookups) as compared to write requests (routing table updates) . To
+model this we consider pure reader workloads and workloads which are
+read intensive but have a lesser fraction of writes.
+
+We used a realistic routing table derived from the routeviews.org
+database. This table consists of 167,000 routes. We call this table
+the \emph{167k table}. The input set was generated randomly using the
+167k router configuration. A reader task consisted of performing
+lookups for 100,000 inputs from this input set. An updater task
+involves replacing routes for 1000 routes in the input set. Each of
+the reader and updater threads execute 128 such tasks in a single run
+of the test.\\
+
+The benchmarks involving only readers were run on the RCU version,
+the reader-writer lock version and the vanilla version with no
+locks. When there are updaters involved in the workload the benchmark
+was run on the RCU version and the reader-writer lock version. We
+cannot run the workload with writers on the vanilla version since it
+is not thread safe. 
+
+\subsubsection{Pure Reader Workload}
+ We first look at a workload consisting of only readers. The results
+ are shown in Figure \ref{img:macro_vr_0w} and Table
+ \ref{tbl:macro_vr_0w}.\\
+
+\begin{table}[tph]
+\begin{center}
+\input{macro_vr_0w.tex}
+\end{center}
+\caption{Performance comparison over a workload with increasing number of readers using the 167k routing table. The first three columns show time in seconds.}
+\label{tbl:macro_vr_0w}
+\end{table}
+
+\begin{figure}[tph]
+\includegraphics[scale = 0.6]{../images/graphs/macro_vr_0w.eps}
+\caption{Performance of increasing number of readers using the 167k routing table.}
+\label{img:macro_vr_0w}
+\end{figure}
+
+From Figure \ref{img:macro_vr_0w}, we see that RCU scales much better
+than the reader-writer lock version. RCU is always within $2$ times
+the vanilla version. Time taken by the reader-writer lock increases
+linearly and is up to $31$ times slower than the version without
+locks.
+
+These results validate our claim that RCU is wait-free and lock-free
+for readers. In the RCU version readers do not create any
+synchronization overhead. Readers in the reader-writer lock version
+update a shared lock variable before they access the routing
+table. The state of the shared variable needs to be updated through
+all cores. As the number of threads increases, the contention causes
+cache line bouncing and increased usage of the processor bus
+bandwidth. Thus we see a linear increase in time as the number of
+readers increase. **Justify with profiling measurements.
+
+\subsubsection{Read Intensive Workload With One Writer}
+\begin{table}[tph]
+\begin{center}
+\input{macro_vr_0w.tex}
+\end{center}
+\caption{Performance comparison of increasing number of readers and one writer with the 167k routing table.}
+\label{tbl:macro_vr_1w}
+\end{table}
+
+
+\begin{figure}[tph]
+\includegraphics[scale = 0.6]{../images/graphs/macro_vr_1w}
+\caption{Performance of increasing number of readers and one writer with the 167k routing table.}
+\label{img:macro_vr_1w}
+\end{figure}
+
+We also conducted a benchmark which consisted of one updater and an
+increasing number of readers. The results are shown in Figure
+\ref{img:macro_vr_1w} and Table \ref{tbl:macro_vr_1w}.
+
+We see from Figure \ref{img:macro_vr_1w} that RCU scales far better
+than the reader-writer lock. Time taken by the reader-writer lock
+increases linearly with the number of threads. The reader-writer lock
+version is over nine times slower than the RCU version for the
+workload consisting of 7 readers and 1 writer. Thus we see that RCU
+outperforms the reader-writer lock for a read intensive workload with
+some writers.
+
+**Profile reader-writer lock and RCU. Then explain the linear increase
+in time taken by the reader-writer lock.
+
+\subsubsection{Write Intensive Workloads}
+We have seen that RCU outperforms the Reader-Writer lock for reader heavy workloads. For completeness, we look at some workloads which are not common for a router: writer heavy workloads. The performance of a workload with zero readers and increasing number of writers is shown in  Figure \ref{img:macro_0r_vw} and Table \ref{tbl:macro_0r_vw}. Here, we see that the Reader-Writer Lock outperforms RCU by a factor of . We attribute this to the increased memory footprint and increased overhead in management of the reclaim lists. **Justify.
+
+The performance of a workload consisting of one reader and increasing number of writers is shown in  Figure \ref{img:macro_1r_vw} and Table \ref{tbl:macro_1r_vw}. Although RCU does not scale, we see that it performs better than the Reader-Writer Lock.
+
+It is clear that RCU is not as fabulous for write intensive workloads. These workloads are very uncommon for a typical router and we can accept this behavior.
+ 
+\begin{table}[tph]
+\begin{center}
+\input{macro_0r_vw.tex}
+\end{center}
+\caption{Performance comparison of increasing number of writers and zero readers using the 167k routing table.}
+\label{tbl:macro_0r_vw}
+\end{table}
+
+
+\begin{figure}[tph]
+\includegraphics[scale = 0.6]{../images/graphs/macro_0r_vw}
+\caption{Performance of increasing number of writers and zero readers with the 167k routing table.}
+\label{img:macro_0r_vw}
+\end{figure}
+
+
+\begin{table}[tph]
+\begin{center}
+\input{macro_1r_vw.tex}
+\end{center}
+\caption{Performance comparison of increasing number of writers and one reader using the 167k routing table.}
+\label{tbl:macro_1r_vw}
+\end{table}
+
+
+\begin{figure}[tph]
+\includegraphics[scale = 0.6]{../images/graphs/macro_1r_vw}
+\caption{Performance of increasing number of writers and one reader with the 167k routing table.}
+\label{img:macro_1r_vw}
+\end{figure}
+
+\subsection{Micro-benchmarks}
+\label{sec:microbenchmarks}
+The micro-benchmarks have tests which repeatedly access a small set of addresses in a very short time span.
+As with macro-benchmarks, we are interested mainly in read heavy workloads. We look at write heavy workloads for completeness.
+
+\paragraph{Pure Reader Workload}
+Here we consider a workload consisting of only readers. We look at how the reader-writer lock and RCU perform against the unmodified vanilla version.
+As we can see from Table \ref{tbl:micro_vr_0w} which is represented in Figure \ref{img:micro_vr_0w}, the reader-writer lock is upto 50 times slower than a version without locks.
+The reader-writer lock does not scale with an increase in the number of threads. This can be seen clearly in Figure \ref{chart:readers_comparison}. The RCU version scales with the number of threads. The RCU version is also within 1.5 times the performance of the version without any locks.
+
+The Reader-Writer lock spends time acquiring a lock on reads while RCU does not have any additional overhead for readers. Any additional overhead of RCU over the vanilla version is due to the overhead in checking reclaim lists and detecting quiescent states.
+
+The Click configuration file used for this purpose is shown in Listing \ref{lst:readercomparison}.
 \begin{table}
 \begin{center}
-\begin{tabular}{|l|l|l|l|l|l|}
-\hline No. of Reader Threads & No Locks (s) & Reader-Writer Lock (s) &  RCU (s)\\
-\hline 1 & 0.565 & 0.66125 & 0.637\\
-\hline 2 & 0.6125 & 4.3755 & 0.685\\
-\hline 3 & 0.725 & 6.207 & 0.76\\
-\hline 4 & 0.8925 & 11.585 & 0.7925\\
-\hline
-\end{tabular}
+\input{micro_vr_0w.tex}
 \end{center}
-\label{tbl:readerwriter_nolocks}
-\caption{Performance comparison over a pure reader workload}
+\label{tbl:micro_vr_0w}
+\caption{Performance comparison over workload with increasing number of readers and zero writers.}
 \end{table}
 
 \begin{figure}[tph]
 \fbox{
-\includegraphics[scale = 0.4]{readers_comparison.png}
+\includegraphics[scale = 0.4]{../images/graphs/micro_vr_0w}
 }
 \caption{Performance comparison over a pure reader workload}
-\label{chart:readers_comparison}
+\label{img:micro_vr_0w}
 \end{figure}
 
 \begin{lstlisting}[float=tph, caption = A Click configuration file for 4 readers, label =lst:readercomparison]
@@ -649,186 +784,65 @@ DriverManager(stop);
 \end{lstlisting}
 
 \paragraph{Read-Intensive workloads}
-We now compare the performance of RCU over the reader-writer lock in the presence of an updater. We refer the reader to Table \ref{tbl:readintensive} for the numbers.
-From Figure \ref{chart:readintensive} see that the reader-writer lock does not scale with an increase in the number of readers. For read intensive work load consisting of 3 readers and 1 writer RCU performs 76\% better than a reader-writer lock. The third column compares RCU considering the reader-writer lock as a baseline. The percentage improvement column computes $\frac{RWLock - RCU}{RWLock}\times100$. Each of the readers execute a task consisting of reading a particular route $100000$ times. Each task is executed $128$ times.
-\begin{table}
+We now compare the performance of RCU over the reader-writer lock in the presence of a writer. This workload reflects typical router usage. We refer the reader to Table \ref{tbl:micro_vr_1w} and Figure \ref{img:micro_vr_1w} for the results.
+RCU scales over an increase in the number of threads, however the reader-writer lock does not scale with an increase in the number of readers. This can be attributed to time spent waiting to acquire the lock before reading or writing in the Reader-Writer Lock version.
+
+\begin{table}[tph]
 \begin{center}
-\begin{tabular}{|l|l|l|l|}
-\hline Workload & Reader-Writer Lock (s) & RCU (s) & Percentage Improvement (\%)\\
-\hline 1 R, 1 W	& 1.3425 & 0.78	& 41.8994413407821\\
-\hline 2 R, 1 W	& 5.1025 & 0.945 & 81.4796668299853\\
-\hline 3 R, 1W & 8.535 & 1.975 & 76.8599882835384\\
-\hline
-\end{tabular}
+\input{micro_vr_1w.tex}
 \end{center}
-\label{tbl:readintensive}
-\caption{Performance comparison over a pure reader workload}
+\label{tbl:micro_vr_1w}\ref{img:micro_vr_1w}
+\caption{Performance comparison of increasing number of writers with zero readers.}
 \end{table}
-\\
+
 \begin{figure}[tph]
 \begin{center}
 \fbox{
-\includegraphics[scale = 0.4]{rcu_comparison.png}
+\includegraphics[scale = 0.5]{../images/graphs/micro_vr_1w}
 }
-\caption{Performance comparison with one writer and increasing number of readers.}
-\label{chart:readintensive}
+\caption{Performance comparison of increasing number of writers with zero readers.}
+\label{img:micro_vr_1w}
 \end{center}
 \end{figure}
-\\
 
 \paragraph{Write Intensive workloads}
-We now compare the performance of RCU over the reader-writer lock with a write intensive workload. Our goal was to improve performance over read intensive workloads, however we include this section for completeness and correctness. From Table \ref{tbl:writeintensive} and Figure \ref{chart:writeintensive}, we can see that time taken by RCU begins to climb and exceeds the time taken by the reader-writer lock. This could be due to the additional overhead of reclaiming stale data in quiescent states. When there are more writers, there is more stale data. 
-\\The percentage improvement column computes .
+We now compare the performance of RCU with the reader-writer lock for a write intensive workload. Our goal is to improve performance over read intensive workloads, so we do not care much about the results of this workload. . Additional overhead caused due to contention of the lock to free stale data in quiescent states. When there are more writers, there is more stale data. Since these benchmarks target a very small set of routes, the reclamation also has contention for the same memory location.
+
 \begin{table}[tph]
 \begin{center}
-\begin{tabular}{|l|l|l|l|}
-\hline Workload & Reader-Writer Lock (s) & RCU (s) & $\frac{RWLock - RCU}{RWLock}\times100$\\
-\hline 1 R, 1 W	& 1.3425 & 0.78	& 41.8994413407821\\
-\hline 2 R, 1 W	& 5.1025 & 0.945 & 81.4796668299853\\
-\hline 3 R, 1W & 8.535 & 1.975 & 76.8599882835384\\
-\hline
-\end{tabular}
+\input{micro_0r_vw.tex}
 \end{center}
-\label{tbl:writeintensive}
-\caption{Performance comparison over a pure reader workload}
+\label{tbl:micro_0r_vw}
+\caption{Performance comparison of increasing number of writers with zero readers.}
 \end{table}
-\\
+
 \begin{figure}[tph]
 \begin{center}
 \fbox{
-\includegraphics[scale = 0.5]{writeintensive.png}
+\includegraphics[scale = 0.5]{../images/graphs/micro_0r_vw}
 }
-\caption{Performance comparison with one reader and increasing number of writers.}
-\label{chart:writeintensive}
+\caption{Performance comparison of increasing number of writers with zero readers.}
+\label{img:micro_0r_vw}
 \end{center}
 \end{figure}
-
-
-%% Macro benchmark sub-section
-\subsection{Macro-benchmarks}
-
-
-The macrobenchmarks are designed to reflect a typical software router
-use case. Usually a router will encounter far more read requests (IP
-lookups) as compared to write requests (routing table updates) . To
-model this we consider pure reader workloads and workloads which are
-read intensive but have a lesser fraction of writes.
-
-We used a realistic routing table derived from the routeviews.org
-database. This table consists of 167,000 routes. We call this table
-the \emph{167k table}. The input set was generated randomly using the
-167k router configuration. A reader task consisted of performing
-lookups for 100,000 inputs from this input set. An updater task
-involves replacing routes for 1000 routes in the input set. Each of
-the reader and updater threads execute 128 such tasks in a single run
-of the test.\\
-
-The benchmarks involving only readers were run on the RCU version,
-the reader-writer lock version and the vanilla version with no
-locks. When there are updaters involved in the workload the benchmark
-was run on the RCU version and the reader-writer lock version. We
-cannot run the workload with writers on the vanilla version since it
-is not thread safe.  The machine used for the benchmarks has the
-configuration shown in Table \ref{tbl:machinemac}.
-
-
-**Machine configuration  will be moved up once microbenchmarks are
-run on the same machine**
-
-\begin{table}
-\begin{center}
-\begin{tabular}{|l|l|l|l|l|l|}
-\hline Feature & Value\\
-\hline CPU &Intel(R) Core(TM) i7-2600 CPU @ 3.40GHz\\
-\hline Number of Cores & 8\\
-\hline Operating System & Mac OS X 10.7.2 11C74\\
-\hline Cache-line size & 64 bytes\\
-\hline L1 cache size (per-CPU) & 32 KB\\
-\hline L2 cache size (shared by 2 CPUs) & 256 KB\\
-\hline L3 cache size (shared by 8 CPUs)& 8 MB\\
-\hline Main memory size & 16 GB\\
-\hline
-\end{tabular}
-\end{center}
-\caption{Machine configuration.}
-\label{tbl:machinemac}
-\end{table}
-
-\subsubsection{Pure Reader Workload}
- We first look at a workload consisting of only readers. The results
- are shown in Figure \ref{chart:167kreader} and Table
- \ref{tbl:167kreader}.\\
 
 \begin{table}[tph]
 \begin{center}
-\input{macro_vr_0w.tex}
+\input{micro_1r_vw.tex}
 \end{center}
-\caption{Performance comparison over a pure reader workload.}
-\label{chart:167kreader}
+\label{tbl:micro_1r_vw}
+\caption{Performance comparison of increasing number of writers with one reader.}
 \end{table}
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.8]{../images/diagrams/graphs/macro_vr_0w.eps}
-\caption{Performance of increasing number of readers using the 167k routing table.}
-\label{chart:167kreader}
-\end{figure}
-
-From Figure \ref{chart:167kreader}, we see that RCU scales much better
-than the reader-writer lock version. RCU is always within $1.6$ times
-the vanilla version. Time taken by the reader-writer lock increases
-linearly and is up to $31$ times slower than the version without
-locks.
-
-These results validate our claim that RCU is wait-free and lock-free
-for readers. In the RCU version readers do not create any
-synchronization overhead. Readers in the reader-writer lock version
-update a shared lock variable before they access the routing
-table. The state of the shared variable needs to be updated through
-all cores. As the number of threads increases, the contention causes
-cache line bouncing and increased usage of the processor bus
-bandwidth. Thus we see a linear increase in time as the number of
-readers increase. **Justify with profiling measurements.
-
-\subsubsection{Read Intensive Workload}
-We also conducted a benchmark which consisted of one updater and an
-increasing number of readers. The results are shown in Figure
-\ref{chart:167kwriter} and Table \ref{tbl:167kwriter}.
-
-\begin{table}[tph]
 \begin{center}
-\begin{tabular}{|c|c|c|}
-\hline Workload & RW Lock (s) & RCU (s) \\
-\hline 1 reader(s), 1 writer(s) & 2.280 & 1.550\\
-\hline 2 reader(s), 1 writer(s) & 3.053 & 1.563\\
-\hline 3 reader(s), 1 writer(s) & 7.520 & 1.617\\
-\hline 4 reader(s), 1 writer(s) & 10.490 & 1.697\\
-\hline 5 reader(s), 1 writer(s) & 14.307 & 1.783\\
-\hline 6 reader(s), 1 writer(s) & 18.200 & 1.857\\
-\hline 7 reader(s), 1 writer(s) & 22.553 & 2.373\\
-\hline
-\end{tabular}
+\fbox{
+\includegraphics[scale = 0.5]{../images/graphs/micro_1r_vw}
+}
+\caption{Performance comparison of increasing number of writers with one reader.}
+\label{img:micro_1r_vw}
 \end{center}
-\caption{Performance comparison of readers with one writer.}
-\label{tbl:167kwriter}
-\end{table}
-
-
-\begin{figure}[tph]
-\includegraphics[scale = 0.8]{../images/diagrams/graphs/macro_vr_1w.eps}
-\caption{Performance of increasing number of readers and one writer with the 167k routing table.}
-\label{chart:167kwriter}
 \end{figure}
- 
-We see from Figure \ref{chart:167kwriter} that RCU scales far better
-than the reader-writer lock. Time taken by the reader-writer lock
-increases linearly with the number of threads. The reader-writer lock
-version is over nine times slower than the RCU version for the
-workload consisting of 7 readers and 1 writer. Thus we see that RCU
-outperforms the reader-writer lock for a read intensive workload with
-lesser updates.
-
-**Profile reader-writer lock and RCU. Then explain the linear increase
-in time taken by the reader-writer lock.
 
 
 \section{Conclusion}

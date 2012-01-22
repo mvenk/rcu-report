@@ -25,9 +25,9 @@ else:
 out.write ("\hline Workload &")
 if(vanilla): 
     out.write ("No Locks (s) &")
-out.write ("Reader-Writer Lock (Time in s) & RCU (Time in s) & ")
+out.write ("Reader-Writer Lock (s) & RCU (s) & ")
 if(vanilla):
-    out.write("$\\frac{\mbox{Reader-Writer Lock}}{\mbox{Vanilla}}$ & $\\frac{\mbox{RCU}}{\mbox{Vanilla}} \\\\\n")
+    out.write("$\\frac{\mbox{Reader-Writer Lock}}{\mbox{No Locks}}$ & $\\frac{\mbox{RCU}}{\mbox{No Locks}}$ \\\\\n")
 else:
     out.write("$\\frac{\mbox{Reader-Writer Lock}}{\mbox{RCU}} $ \\\\\n")
     
@@ -64,7 +64,6 @@ for i in range(1,size,1):
 
 out.write( "\\hline\n\
 \\end{tabular}\n\
-\\label{tbl:xyz}\n\
 ")
 
 out.close()
