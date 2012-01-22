@@ -54,7 +54,7 @@ The ever-increasing volume of network traffic over the internet demands highly e
 \\\\ Commodity machines with SMP multi-core architectures are growing in popularity. A software modular router such as Click running on commodity machines  can benefit greatly by exploiting parallelism on multi-core architectures.
 \\\\ Building a scalable and safe multi-core application is not a trivial task. Shared data structures in a multi-threaded application require synchronization for safe and correct access. Synchronization introduces overheads which attenuate the benefits of parallelism. Locks ultimately have the effect of  serialization such that only one thread accesses shared data at a time. A solution using locks also invariably involves the use of variables to synchronize access. These variables need to be accessed simultaneously by other processes or threads causing \emph{cache line bouncing}. This refers to the overhead of communicating the shared value across multiple caches which is very expensive. The larger the number of threads, the larger is the frequency of access of synchronization variables and the larger is the cost of synchronization. The lock based approach becomes less scalable and hence less attractive. 
 \\\\ It becomes essential to carefully evaluate our context and design a multi-core, multi-threaded solution which is highly efficient. Our context involves a read intensive workload comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} \cite{readcopyupdate} scales efficiently on read intensive workloads and we seek to implement a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional lock-based approach using Click on a commodity machine. 
-\\\\ The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click elements we are concerned with. Section 5 explains the main problems which exist in the current implementation. Section 4 describes our solutions to the problem along with the implementation details. Sections 6 and 7 describe the performance hypotheses and analysis.
+\\\\ The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click elements we are concerned with. Section \ref{sec:problem} describes why implementing a multicore solution was challenging. Section \ref{sec:solution} describes our solutions to the problem along with the implementation details. Sections \ref{sec:perfhypothesis} and \ref{sec:perfeval} describe the performance hypotheses and analysis.
 \section{Related Work}
 \emph{Routebricks} \cite{routebricks} proposes an architecture which enables higher packet processing speeds by distributing router functionality across multiple servers and multiple cores within a server. Their approach involves load balancing through Valiant Load Balancing (VLB). Their method of achieving faster packet processing is at a coarser level of granularity when compared with our approach.
 \\\\ Multiple efforts have been made at exploiting parallelism in the packet-flow mechanism in a software router. Wu and Wolf \cite{runtimepacketprocessing} have designed a run-time system which distributes the allocation of processing tasks to processor cores. It also balances the workload and maps the it across multiple cores. This parallelism is done at a task-level granularity. It does not look at synchronization of objects being used by the task. In our work we attempt to allow the task itself to be thread-safe so that it can be run on multiple cores.
@@ -304,7 +304,7 @@ We have two threads one running: \emph{Updater:: \{remove Route X\}} and the oth
     return 0;
   }
 \end{lstlisting}
-The occurrence of the race mentioned above is rather rare: firstly a read intensive, infrequent update workload is expected but the aforementioned race is more likely in an update intensive workload. Secondly reads are fast compared to updates, so the possibility that a read operation starts before an update and ends after an update is quite small. That being said, we assume that the consequences of the race illustrated in the example above are acceptable. This is justified by the fact that the reader received a stale route - it was once valid route for the given address, and the price is the price of one wrong lookup.
+The occurrence of the race mentioned above is rather rare: firstly a read intensive, infrequent update workload is expected but the aforementioned race is more likely in an update intensive workload. Secondly reads are fast compared to updates, so the possibility that a read operation starts before an update and ends after an update is quite small. That being said, we assume that the consequences of the race illustrated in the example above are acceptable. This is justified by the argument that the reader received a stale route: it was once valid route for the given address, and the ultimate price paid is the price of one wrong lookup.
 \paragraph{Vector:}
 The library files in Click include a generic dynamically resized Vector class. This class and its use in RadixIPLookup has been explained in the Background section. The conflicts are explained in the context of the add\_route() function which adds a route to the radix tree. The code for add\_route is given in Listing \ref{pseudoaddroute}. The way an index is obtained for insertion is summarized in the pseudocode below. 
 \begin{lstlisting}[caption = Pseudocode for acquiring an index in add\_route, label=pseudoaddroute]
@@ -368,6 +368,7 @@ A and B are the addresses, X and Y are the values of the port. The least-common 
 Locks are acquired during updates since we want to verify reader-updater conflicts as opposed to updater-updater conflicts. All three of these are run concurrently on the same instance of RadixIPLookup. The race is illustrated with the help of a sequence diagram in Figure \ref{race_readerfigure}
 \\\\A thread-safe implementation will have us expect that we always get X or the default route. A default route is returned if there was no prefix matching the route being looked up in the tree. But we see that the lookup sometimes returns Y which is incorrect.
 \section{The Solution}
+\label{sec:solution}
 The race conditions described in the previous sections occur due to threads accessing shared data structures. In order to provide a thread-safe solution, several solutions were tried and their performance was compared. This section describes the different approaches tried in order to solve the problem. Coarse grained locking, fine-grained locking and Read Copy Update are the different methods we have tried. The Read Copy Update approach is the focus of this document, and a justification of its working and the implementation details are exposed in section 6.3
 \subsection{Coarse-grained locking}
 Locking solves our problems since it prevents two threads from accessing shared data structures at the same time. As our problem is in the context of a read intensive workload, a reader-writer lock was chosen.
@@ -569,16 +570,18 @@ An epoch is the period during which the \emph{RouterThread} performs some activi
 \paragraph{Implementation details}
 In order to maintain epoch numbers we introduce a \emph{\_thread\_epoch} variable in the RouterThread class. The Master maintains the global epoch number. When control is returned to the driver loop after tasks are run, we increment the \emph{\_thread\_epoch} variable and attempt to reclaim freed data. As in the Timer approach described earlier, we maintain two lists: a \emph{reclaim\_now list} and a \emph{reclaim\_later} list. An updater always adds any stale data to the \emph{relcaim\_later} list. During a reclaimation, we free the data structures in the \emph{reclaim\_now} list and swap the two lists. This ensures that we follow the freeing mechanism described in the above paragraph. Effectively, we can reclaim freed-data if every thread has changed its epoch variable since the last successful reclamation or if thread is blocked.
 \subsection{Performance Hypothesis}
+\label{sec:perfhypothesis}
 RCU is known to work best for a reader-heavy workload with a small number of updaters.
 \\Our claim is that the RCU mechanism for click outlined above has almost zero reader-side overhead. Readers being lock-free and wait-free, we expect RCU performance to be comparable to the original version when there are only readers.
 \\Updaters acquire a lock, so there is some performance penalty in the presence of updaters. We expect the RCU performance for an update-intensive workload to be comparable to that of a Read-Write lock.
 
 \section{Performance Evaluation}
+\label{sec:perfeval}
 \subsection{Experimental Setup}
 We analyzed the performance of our solutions on a Mac machine with 8 cores whose configuration is shown in Table \ref{tbl:machinemac}.
 We used the CPU time reported by system utility \emph{/usr/bin/time} to measure performance.
 
-Macrobenchmarks in  \ref{sec:macrobenchmarks} evaluate the performance of RCU over a routing table consisting of roughly 167,000 routes. Microbenchmarks in \ref{sec:microbenchmarks} evaluate the performance of RCU with a over a small range of IP Addresses.
+Macrobenchmarks in Section \ref{sec:macrobenchmarks} evaluate the performance of RCU over a routing table consisting of roughly 167,000 routes. Microbenchmarks in Section \ref{sec:microbenchmarks} evaluate the performance of RCU with a over a small range of IP addresses.
 
 \begin{table}
 \begin{center}
@@ -639,15 +642,21 @@ is not thread safe.
 \end{table}
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.6]{../images/graphs/macro_vr_0w.eps}
-\caption{Performance of increasing number of readers using the 167k routing table.}
+\includegraphics[scale = 0.6]{../images/graphs/macro_vr_0w}
+\caption{Performance of increasing number of readers with zero writers using the 167k routing table.}
 \label{img:macro_vr_0w}
+\end{figure}
+
+\begin{figure}[tph]
+\includegraphics[scale = 0.6]{../images/graphs/profile_locks_macro_rwl_vr_0w}
+\caption{Percentage time spent in contending for the lock for a pure reader workload.}
+\label{img:profile_rwl_locks_vr_0w}
 \end{figure}
 
 From Figure \ref{img:macro_vr_0w}, we see that RCU scales much better
 than the reader-writer lock version. RCU is always within $2$ times
 the vanilla version. Time taken by the reader-writer lock increases
-linearly and is up to $31$ times slower than the version without
+linearly and is up to $22$ times slower than the version without
 locks.
 
 These results validate our claim that RCU is wait-free and lock-free
@@ -657,8 +666,8 @@ update a shared lock variable before they access the routing
 table. The state of the shared variable needs to be updated through
 all cores. As the number of threads increases, the contention causes
 cache line bouncing and increased usage of the processor bus
-bandwidth. Thus we see a linear increase in time as the number of
-readers increase. **Justify with profiling measurements.
+bandwidth. The amount of time spent in acquiring a lock to enter
+the read side critical section shown in \ref{img:profile_rwl_locks_vr_0w}. The graph shows an increasing amount of time spent contending for the lock with an increase in the number of threads. We can therefore attribute the  linear increase in time as the number of readers increase to the lock contention. This data was obtained for the benchmark shown in \ref{tbl:macro_vr_0w} using the Dtrace profiler. 
 
 \subsubsection{Read Intensive Workload With One Writer}
 \begin{table}[tph]
@@ -676,6 +685,13 @@ readers increase. **Justify with profiling measurements.
 \label{img:macro_vr_1w}
 \end{figure}
 
+
+\begin{figure}[tph]
+\includegraphics[scale = 0.6]{../images/graphs/profile_locks_macro_rwl_vr_1w}
+\caption{Percentage time spent in contending for the lock for a workload with increasing number of readers and one writer.}
+\label{img:profile_rwl_locks_vr_1w}
+\end{figure}
+
 We also conducted a benchmark which consisted of one updater and an
 increasing number of readers. The results are shown in Figure
 \ref{img:macro_vr_1w} and Table \ref{tbl:macro_vr_1w}.
@@ -684,12 +700,8 @@ We see from Figure \ref{img:macro_vr_1w} that RCU scales far better
 than the reader-writer lock. Time taken by the reader-writer lock
 increases linearly with the number of threads. The reader-writer lock
 version is over nine times slower than the RCU version for the
-workload consisting of 7 readers and 1 writer. Thus we see that RCU
-outperforms the reader-writer lock for a read intensive workload with
-some writers.
-
-**Profile reader-writer lock and RCU. Then explain the linear increase
-in time taken by the reader-writer lock.
+workload consisting of 7 readers and 1 writer. Figure \ref{img:profile_rwl_locks_vr_1w} shows the percentage time spent in contending for the lock to enter the read side critical section. We can attribute the linear increase in time taken by the reader-writer lock to the increasing lock contention. RCU does not acquire any locks in this workload. We can clearly see that RCU
+outperforms the reader-writer lock for a read intensive workload with some writers.
 
 \subsubsection{Write Intensive Workloads}
 We have seen that RCU outperforms the Reader-Writer lock for reader heavy workloads. For completeness, we look at some workloads which are not common for a router: writer heavy workloads. The performance of a workload with zero readers and increasing number of writers is shown in  Figure \ref{img:macro_0r_vw} and Table \ref{tbl:macro_0r_vw}. Here, we see that the Reader-Writer Lock outperforms RCU by a factor of . We attribute this to the increased memory footprint and increased overhead in management of the reclaim lists. **Justify.
@@ -852,7 +864,7 @@ today is a feasible way to improve performance. This document has outlined an ef
 
 
 The primary challenges in implementing RCU for Click were to
-identify quiescent states in a way which can be applied to all
+identify quiescent states in a way which could be applied to all
 elements. 
 
 We have built an RCU framework for userlevel Click invlolving a
@@ -865,10 +877,13 @@ this mechanism does indeed have a very low reader side overhead
 70\% better than a reader-writer lock on read intensive workloads.
 
 \section{Future Work}
-\begin{enumerate}
-\item Implement RCU for RadixIPLookup if Radix nodes are deleted when a route is removed.
-\item Implement RCU for the Radix Tree: Currently, RCU has been only used on the vector. A coarse grained lock is acquired around updates to the Radix Tree.
-\end{enumerate}
+
+%\begin{enumerate}
+%\item Implement RCU for RadixIPLookup if Radix nodes are deleted when a route is removed.
+%\item Implement RCU for the Radix Tree: Currently, RCU has been only used on the vector. A coarse grained lock is acquired around updates to the Radix Tree.
+%\end{enumerate}
+
+Our approach uses RCU for the vector in RadixIPLookup, however a course grained lock is acquired for updates to the radix tree. The size of the radix tree depends on the size of the routing table, which is typically very large. Thus implementing RCU based synchronization for the radix tree would be very useful.
 \section{Acknowledgements}
 I am tremendously grateful to my advisor, Professor Eddie Kohler for his continued guidance, support and ideas.
 I am grateful to Rohit Krishna Kumar for insightful discussions, code and comments.

@@ -18,7 +18,7 @@ if(vanilla):
 size = len(rcu)
 out = open(outfile,'w')
 if(vanilla):
-    out.write ("\\begin{tabular}{|l|l|l|l|l|l|}\n")
+    out.write ("\\begin{tabular}{|l|p{1.5cm}|p{1.5cm}|p{1cm}|l|l|}\n")
 else:
     out.write ("\\begin{tabular}{|l|l|l|l|l|}\n")
     

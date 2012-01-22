@@ -1,11 +1,12 @@
-\begin{tabular}{|l|l|l|l|l|l|}
+\begin{tabular}{|l|p{1.5cm}|p{1.5cm}|p{1cm}|l|l|}
 \hline Workload &No Locks (s) &Reader-Writer Lock (s) & RCU (s) & $\frac{\mbox{Reader-Writer Lock}}{\mbox{No Locks}}$ & $\frac{\mbox{RCU}}{\mbox{No Locks}}$ \\
-\hline 1 reader 0 writers & 0.920 & 2.915 & 1.610&3.168&1.750\\
-\hline 2 readers 0 writers & 0.960 & 4.425 & 1.600&4.609&1.667\\
-\hline 3 readers 0 writers & 1.060 & 6.900 & 1.660&6.509&1.566\\
-\hline 4 readers 0 writers & 1.250 & 11.737 & 1.750&9.390&1.400\\
-\hline 5 readers 0 writers & 1.320 & 14.387 & 1.790&10.900&1.356\\
-\hline 6 readers 0 writers & 1.420 & 18.160 & 1.860&12.789&1.310\\
-\hline 7 readers 0 writers & 1.520 & 22.242 & 2.450&14.633&1.612\\
+\hline 1 reader 0 writers & 1.005 & 2.152 & 1.545&2.142&1.537\\
+\hline 2 readers 0 writers & 0.970 & 3.740 & 1.522&3.856&1.570\\
+\hline 3 readers 0 writers & 0.968 & 7.418 & 1.490&7.667&1.540\\
+\hline 4 readers 0 writers & 1.028 & 11.717 & 1.550&11.404&1.509\\
+\hline 5 readers 0 writers & 1.245 & 14.317 & 1.698&11.500&1.363\\
+\hline 6 readers 0 writers & 1.387 & 18.117 & 1.735&13.058&1.250\\
+\hline 7 readers 0 writers & 1.433 & 22.145 & 1.833&15.459&1.279\\
+\hline 8 readers 0 writers & 1.525 & 33.965 & 2.317&22.272&1.520\\
 \hline
 \end{tabular}
