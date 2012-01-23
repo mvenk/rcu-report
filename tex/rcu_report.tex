@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass[12pt, a4paper]{article}
 \usepackage{graphicx}
 \usepackage{fancyvrb}
 \usepackage{listings}
@@ -47,22 +47,29 @@ Madhuri Venkatesh
 
 \pagebreak
 \section{Abstract}
-High performance routing lookups are critically important for packet forwarding. With multi-core systems becoming more popular and more prevalent, leveraging them is key to improving performance. However, obtaining a correct, scalable and fast thread-safe solution remains challenging. 
-\\\\We have described an approach for providing thread-safety using \emph{Read Copy Update}. We have verified that we incur low read side overhead and that our approach performs up to 80\% better than reader-writer locks on read-intensive workloads.
-\section{Introduction}
-The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Link rates today exceed 40 Gbps, commodity network cards operate at over 15 Gbps but software routers struggle to comfortably scale beyond 10 Gbps. 
-\\\\ Commodity machines with SMP multi-core architectures are growing in popularity. A software modular router such as Click running on commodity machines  can benefit greatly by exploiting parallelism on multi-core architectures.
-\\\\ Building a scalable and safe multi-core application is not a trivial task. Shared data structures in a multi-threaded application require synchronization for safe and correct access. Synchronization introduces overheads which attenuate the benefits of parallelism. Locks ultimately have the effect of  serialization such that only one thread accesses shared data at a time. A solution using locks also invariably involves the use of variables to synchronize access. These variables need to be accessed simultaneously by other processes or threads causing \emph{cache line bouncing}. This refers to the overhead of communicating the shared value across multiple caches which is very expensive. The larger the number of threads, the larger is the frequency of access of synchronization variables and the larger is the cost of synchronization. The lock based approach becomes less scalable and hence less attractive. 
-\\\\ It becomes essential to carefully evaluate our context and design a multi-core, multi-threaded solution which is highly efficient. Our context involves a read intensive workload comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} \cite{readcopyupdate} scales efficiently on read intensive workloads and we seek to implement a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional lock-based approach using Click on a commodity machine. 
-\\\\ The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click elements we are concerned with. Section \ref{sec:problem} describes why implementing a multicore solution was challenging. Section \ref{sec:solution} describes our solutions to the problem along with the implementation details. Sections \ref{sec:perfhypothesis} and \ref{sec:perfeval} describe the performance hypotheses and analysis.
-\section{Related Work}
-\emph{Routebricks} \cite{routebricks} proposes an architecture which enables higher packet processing speeds by distributing router functionality across multiple servers and multiple cores within a server. Their approach involves load balancing through Valiant Load Balancing (VLB). Their method of achieving faster packet processing is at a coarser level of granularity when compared with our approach.
-\\\\ Multiple efforts have been made at exploiting parallelism in the packet-flow mechanism in a software router. Wu and Wolf \cite{runtimepacketprocessing} have designed a run-time system which distributes the allocation of processing tasks to processor cores. It also balances the workload and maps the it across multiple cores. This parallelism is done at a task-level granularity. It does not look at synchronization of objects being used by the task. In our work we attempt to allow the task itself to be thread-safe so that it can be run on multiple cores.
-\\\\ Dobrescu et al. \cite{dobrescu} have proposed a technique in which the packet-processing flow and server characteristics are taken as input to formulate an optimization problem. A compiler would then solve this problem and output machine code which will optimize for throughput. Our work could complement [5], since by creating a thread-safe solution, we eliminate dependencies within the elements. This means that we do not have to worry about the order of execution of tasks which share data.
+High performance routing lookups are critically important for packet forwarding. With multi-core systems becoming more popular and more prevalent, leveraging them is key to improving performance. However, obtaining a correct, scalable and fast thread-safe solution remains challenging.\\
 
+We have described an approach for providing thread-safety using \emph{Read Copy Update}. We have verified that we incur low read side overhead and that our approach performs up to 80\% better than reader-writer locks on read-intensive workloads.
+\section{Introduction}
+The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Link rates today exceed 40 Gbps, commodity network cards operate at over 15 Gbps but software routers struggle to comfortably scale beyond 10 Gbps. \\
+
+Commodity machines with SMP multi-core architectures are growing in popularity. A software modular router such as Click running on commodity machines  can benefit greatly by exploiting parallelism on multi-core architectures.\\
+
+Building a scalable and safe multi-core application is not a trivial task. Shared data structures in a multi-threaded application require synchronization for safe and correct access. Synchronization introduces overheads which attenuate the benefits of parallelism. Locks ultimately have the effect of  serialization such that only one thread accesses shared data at a time. A solution using locks also invariably involves the use of variables to synchronize access. These variables need to be accessed simultaneously by other processes or threads causing \emph{cache line bouncing}. This refers to the overhead of communicating the shared value across multiple caches which is very expensive. The larger the number of threads, the larger is the frequency of access of synchronization variables and the larger is the cost of synchronization. The lock based approach becomes less scalable and hence less attractive. \\
+
+It becomes essential to carefully evaluate our context and design a multi-core, multi-threaded solution which is highly efficient. Our context involves a read intensive workload comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} \cite{readcopyupdate} scales efficiently on read intensive workloads and we seek to implement a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional lock-based approach using Click on a commodity machine. \\
+
+The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click elements we are concerned with. Section \ref{sec:problem} describes why implementing a multicore solution was challenging. Section \ref{sec:solution} describes our solutions to the problem along with the implementation details. Sections \ref{sec:perfhypothesis} and \ref{sec:perfeval} describe the performance hypotheses and analysis.
+\section{Related Work}
+\emph{Routebricks} \cite{routebricks} proposes an architecture which enables higher packet processing speeds by distributing router functionality across multiple servers and multiple cores within a server. Their approach involves load balancing through Valiant Load Balancing (VLB). Their method of achieving faster packet processing is at a coarser level of granularity when compared to our approach.\\
+
+Multiple efforts have been made at exploiting parallelism in the packet-flow mechanism in a software router. Wu and Wolf \cite{runtimepacketprocessing} have designed a run-time system which distributes the allocation of processing tasks to processor cores. It also balances the workload and maps the it across multiple cores. This parallelism is done at a task-level granularity.\\ 
+%It does not look at synchronization of objects being used by the task. In our work we attempt to allow the task itself to be thread-safe so that it can be run on multiple cores.\\
+
+Dobrescu et al. \cite{dobrescu} have proposed a technique in which the packet-processing flow and server characteristics are taken as input to formulate an optimization problem. A compiler would then solve this problem and output machine code which will optimize for throughput.
 \section{Background}
 \label{sec:background}
-We seek to find a scalable way to run userlevel Click elements in a multithreaded environment. Our approach was to try our solutions on the \emph{RadixIPLookup} element. We then extend our solution to other elements in Click. This section presents a brief overview of the RadixIPLookup element.
+This section presents a brief overview of the \emph{RadixIPLookup} element. Our approach involved implementation and analysis using the RadixIPLookup element. We then extended our solution to other elements in Click. 
 \subsection{An overview of RadixIPLookup}
 The \emph{RadixIPLookup} element \cite{radixiplookup} is a class which is used to perform IP lookups. It uses a radix trie to perform the lookups and a vector to store the routes. This structure is explained in further detail. 
 \subsubsection{The Radix Tree}
@@ -72,7 +79,7 @@ The radix tree is structured as a trie. The trie has  $2^8$ nodes at the first l
 \caption{The Radix Tree}
 \label{radixtree}
 \end{figure}
-\\Each level consists of radix nodes. The structure of the radix node is shown in Listing \ref{radixnode}. \emph{\_n} represents the number of radix nodes at that level. \emph{\_bitshift} represents the number of bits to be shifted at that level for prefix matching. For the radix node at level 0 \emph{\_n} is 256 and \emph{\_bitshift} is 24 (which is $32 - 8$). This means that the first 8 bits of the address are matched. For the radix nodes at level 1 \emph{\_n} is 16 and \emph{\_bitshift} is 20 (which is $32 -8 -4$). This means that at level 1, the first 12 bits of the address have been matched.
+\\Each level consists of radix nodes. The structure of the radix node is shown in Listing \ref{radixnode}. \emph{\_n} represents the number of radix nodes at that level. \emph{\_bitshift} represents the number of bits to be shifted at that level for prefix matching. For the radix node at level 0 \emph{\_n} is 256 and \emph{\_bitshift} is 24 (which is $32 - 8$). This means that the first 8 bits of the address are matched. For the radix nodes at level $1$, \emph{\_n} is 16 and \emph{\_bitshift} is 20 (which is $32 -8 -4$). This means that at level 1, the first 12 bits of the address have been matched.
 \begin{lstlisting}[float=tph, caption = The Radix Class, label=radixnode]
 class Radix {
   private:
@@ -90,9 +97,10 @@ class Radix {
 \end{lstlisting}
 The functions \emph{add\_route} and \emph{delete\_route} are used to add and delete routes into the routing table.
 \paragraph{Lookups}
-Routing Table Lookups for the Internet Protocol use a longest prefix match algorithm matching a candidate route with the highest subnet mask. The node at the top most level stores keys which need to match upto an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a 12 bit long prefix and so on. The last level stores keys which can match up to a 32 bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP Address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists we repeat the process trying to obtain a longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
+Routing Table Lookups for the Internet Protocol use a longest prefix match algorithm matching a candidate route with the highest subnet mask. The node at the top most level stores keys which need to match up to an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a $12$ bit long prefix and so on. The last level stores keys which can match up to a $32$ bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP Address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists we repeat the process trying to obtain the longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
 \begin{lstlisting}[caption = The lookup function, label=lookup]
-  static inline int lookup(const Radix *r, int cur, uint32_t addr) {
+  static inline int lookup(const Radix *r, int cur, 
+                           uint32_t addr) {
     while (r) {
       int i1 = (addr >> r->_bitshift) & (r->_n - 1);
       const Child &c = r->_children[i1];
@@ -104,7 +112,7 @@ Routing Table Lookups for the Internet Protocol use a longest prefix match algor
   }
 \end{lstlisting}
 \subsubsection{The Vector class}
-The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. The names of the first four fields are self-explanatory, Extra is used to recycle previously used but currently unused space within the vector. If the index in the vector is in use Extra is set to $-1$. If an entry in the vector is deleted, the index of that entry is added to a free list.\\
+The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. The names of the first four fields are self-explanatory, Extra is used to recycle previously used but currently unused space within the vector. Extra is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is in use Extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a free list.\\
 \\The use of \emph{extra} is illustrated with the help of an example. Table \ref{tbl:vector} represents the vector at some point in time. The indices 2, 4 and 5 in the vector are currently being used (hence their \emph{\_vfree} is set to $-1$). The indices 0, 1 and 3 were in use earlier and have been deleted. They are part of the freelist. The \emph{\_vfree} points to the first entry in the freelist which will be used next. Briefly, \verb$freelist::{0 -> 3 -> 1,_vfree= 0}$. Let us say a new entry is added to the vector. So \emph{\_vfree} is reused, and the freelist is updated. Now, \verb$freelist::{ 3 -> 1, _vfree =3}$. Following another update, the index 3 will be used and the \verb$freelist::{1,_vfree=1}$. 
 \\If the index 2 is now freed, \verb$freelist::{2 -> 1,_vfree = 2}$.
 \\
@@ -125,17 +133,17 @@ The Click library files provide an implementation of a generic Vector. A brief e
 \caption{Vector with routes}
 \end{table}
 \paragraph{Dynamic resize}
-As is the case with most Vector classes, the Vector class in click has an \_push\_back() function which adds an entry to the vector.
-\\\\ If \_n exceeds \_capacity, a call to reserve\_and\_push\_back() is made. This dynamically increases the size of the vector. The code for push\_back and reserve\_and\_push\_back() is given in the code-listing.
+As is the case with most Vector classes, the Vector class in click has a \emph{push\_back()} function which adds an entry to the vector.
+\\\\ If \_n exceeds \_capacity, a call to reserve\_and\_push\_back() is made. This dynamically increases the size of the vector. The code for push\_back() and reserve\_and\_push\_back() is given in Listing \ref{pushback} and Listing \ref{reserveandpushback}.
 
 \section{The Problem}
 \label{sec:problem}
-Our goal is to improve lookup performance by allowing for multithread access to Click elements. In this section we look at problems in the existing code and the key factors which hinder safe multithreaded access.
+Our goal is to improve lookup performance by allowing for multithread access to Click elements. In this section we look at existing problems which hinder safe multithreaded access.
 \\\\The section is divided into unsafe access caused by multiple updaters (Updater-Updater Conflicts) and unsafe access caused by concurrent readers and updaters (Reader-Updater Conflicts). Concurrent updaters breed race conditions which might lead to an inconsistency in the data structures being used. A reader racing with an updater might read stale or invalid data.
 \subsection{Updater-Updater Conflicts}
-We now deal with race-conditions and conflicts arising due to multiple updaters running concurrently on the same instance of RadixIPLookup.
+We now deal with race-conditions and conflicts arising due to multiple updaters running concurrently using the same instance of RadixIPLookup. When multiple threads use the same instance of RadixIPLookup, they access the same data structures within RadixIPLookup.
 \paragraph{Radix Tree}
-The radix tree suffers from Update-Update conflicts. If multiple updaters try to modify the same region of the tree, there is a race in \emph{change()} for the assignment of the child pointer. This could cause some of the updates to be lost and also cause a memory leak. The size of the memory leak can be equal to the depth of tree times the size of a radix node.
+The radix tree suffers from Update-Update conflicts. If multiple updaters try to modify the same region of the tree, there is a race in \emph{change()} for the assignment of the child pointer. This could cause some of the updates to be lost and also cause a memory leak. The size of the memory leak can be equal to the depth of the tree times the size of a radix node.
 \\\\The race described above is illustrated with the help of Listing \ref{change}.
 \begin{lstlisting} [caption = Race in Change, label =change]
   int
@@ -158,10 +166,11 @@ The radix tree suffers from Update-Update conflicts. If multiple updaters try to
     .......
   }
 \end{lstlisting}
-The change() code in Listing \ref{change} is used to create a radix node for a route with a specific address, and mask. The key passed as a parameter is the index into the vector where the route is stored. Looking at line number 9, we see that if there are multiple threads executing change() there is a race for the assignment of the radix node. Multiple threads may call \emph{make\_radix()}, however only one pointer which is returned by \emph{make\_radix()} is assigned. This behavior can lead to memory leaks.
+The change() code in Listing \ref{change} is used to create a radix node for a route with a specific address, and mask. The key passed as a parameter is the index into the vector where the route is stored. Looking at line number 9, we see that if there are multiple threads executing change(), there is a race for the assignment of the radix node. Multiple threads may call \emph{make\_radix()}, however only one pointer which is returned by \emph{make\_radix()} is assigned. This behavior can lead to memory leaks.
 \paragraph{Vector}
-When there are multiple updaters there is contention for acquiring an index into the vector. Many updaters trying to add a route might receive the same index value. If multiple updaters are given the same value of the index, there can be an inconsistency in the state of the vector which includes the size and free-list. Since the vector is resized dynamically, we could lose updates and have memory-leaks if reserve() is called concurrently.
-\\\\The conflicts described above are better understood with the help of code. We will attempt to explain the conflicts using Listing \ref{addroute}.
+When there are multiple updaters there is contention for acquiring an index into the vector. Many updaters trying to add a route might receive the same index value. If multiple updaters are given the same value of the index, there can be an inconsistency in the state of the vector. For example, the size of the vector might be stored wrongly or the freelist might be updated wrongly. Since the vector is resized dynamically, we could lose updates and have memory-leaks if reserve() is called concurrently.\\
+
+We explain the conflicts mentioned above with examples using the \emph{add\_route()} function shown in  Listing \ref{addroute}.
 \begin{lstlisting}[caption = The add\_route function, label=addroute]
   int
   RadixIPLookup::add_route(const IPRoute &route, 
@@ -197,16 +206,18 @@ When there are multiple updaters there is contention for acquiring an index into
     return 0;
   }
 \end{lstlisting}
-We consider two cases, one in which the concurrently executing threads retrieve an index freelist, the other in which the concurrently executing threads make a call to \emph{push\_back()} on the vector.
-\\
+We consider two cases, one in which the concurrently executing threads retrieve an index from the freelist, the other in which the concurrently executing threads make a call to \emph{push\_back()} on the vector.
+
 \paragraph{Case 1: Concurrent updaters use the freelist}
-Let us assume that \emph{Thread 1 calls add\_route(X,1,NULL,NULL), X.addr =A, Y.mask = M}. The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.\\
-\\Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M} .
-\\Updater 1 and Updater 2 execute line 4 concurrently and recieve the same value of \emph{found}. Let us assume that \emph{found} is some key within the vector and is not equal to \emph{\_v.size()}. Updater 1 executes line 8 first. This updates the key in the radix tree to be the value \emph{found}.\\
-\\Updater 2 executes line 8. The value of the key is set to \emph{found}.
-\\Updater 1 executes the remaining code incuding line 26 which sets \emph{\_v[found].extra} to -1 (which means that the index is in use).
-\\Updater 2 now sets \emph{\_vfree} to \emph{\_v[found].extra} which is -1. If \emph{\_vfree} is -1, it means that there are no more free keys in the vector, which may not be true. This brings the vector into an inconsistent state.
-\\
+Assume the freelist is as follows before the execution of this code sequence:$freelist::{ 3 -> 1-> 5, _vfree =3}$. Consider the following sequence of events:
+\begin{enumerate}
+\item Thread 1 calls \emph{add\_route(X,1,NULL,NULL), X.addr =A, Y.mask = M}. The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.
+\item Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M} .
+\item Updater 1 and Updater 2 execute line 4 concurrently and recieve the same value of \emph{found}. Let us assume that \emph{found} is some key within the vector and is not equal to \emph{\_v.size()}. Updater 1 executes line 7 first. This updates the key in the radix tree to be the value \emph{found} which is $3$ according to our example.
+\item Updater 2 executes line 7. The value of the key is set to \emph{found} which is $3$ since the freelist has not changed.
+\item Updater 1 executes the remaining code in add\_route() including line 27 which sets \emph{\_v[found].extra} to -1 (which means that the index is in use). After the Updater 1 has finished executing add\_route(), the freelist reads $freelist::{ 1-> 5, _vfree =1}$.
+\item Updater 2 executes the remaining code sequence. It executes line 24 which sets \emph{\_vfree} to \emph{\_v[found].extra}. \emph{\_V[found].extra} has been set to $-1$ by Updater 1. Thus \emph{\_vfree} is $-1$. The state of the freelist is now $freelist::{ 1-> 5, _vfree =-1}$. The correct state is $freelist::{ 1-> 5, _vfree =1}$. If \emph{\_vfree} is -1, it means that there are no more free keys in the vector, which is not true. This brings the vector into an inconsistent state.
+\end{enumerate}
 \paragraph{Case 2: Concurrent updaters call \emph{push\_back()}}
 Now consider the case when \_v.push\_back() is executed concurrently. For this we will look at the Click code from vector.cc in Listing \ref{pushback}.
 \begin{lstlisting}[caption = The push\_back function, label=pushback]
@@ -222,7 +233,8 @@ Now consider the case when \_v.push\_back() is executed concurrently. For this w
 \end{lstlisting}
 We first consider the case when there is enough space in the vector: the expression $\emph{\_n} < \emph{\_capacity}$ evaluates to true. Updater1 and Updater2 use the same value of \emph{\_n}. The updater which wins the race installs its key at position i, and the other update is lost. If the aforementioned expresssion evaluates to false, we can have a different race which could lead to memory leaks. It is better understood with the help of the \emph{reserve\_and\_push\_back()} function shown in Listing \ref{reserveandpushback}.
 \begin{lstlisting}[caption= reserve\_and\_push\_back(), label =reserveandpushback]
-  Vector<T>::reserve_and_push_back(size_type want, const T *push_x)
+  Vector<T>::reserve_and_push_back(size_type want, 
+                                  const T *push_x)
   {
     if (want < 0)
     want = (_capacity > 0 ? _capacity * 2 : 4);
@@ -369,16 +381,17 @@ Locks are acquired during updates since we want to verify reader-updater conflic
 \\\\A thread-safe implementation will have us expect that we always get X or the default route. A default route is returned if there was no prefix matching the route being looked up in the tree. But we see that the lookup sometimes returns Y which is incorrect.
 \section{The Solution}
 \label{sec:solution}
-The race conditions described in the previous sections occur due to threads accessing shared data structures. In order to provide a thread-safe solution, several solutions were tried and their performance was compared. This section describes the different approaches tried in order to solve the problem. Coarse grained locking, fine-grained locking and Read Copy Update are the different methods we have tried. The Read Copy Update approach is the focus of this document, and a justification of its working and the implementation details are exposed in section 6.3
+The race conditions described in the previous sections occur due to threads accessing shared data structures. In order to provide a thread-safe solution, several solutions were tried and their performance was compared. This section describes the different approaches tried in order to solve the problem. Coarse grained locking, fine-grained locking and Read Copy Update are the different methods we have tried. The Read Copy Update approach is the focus of this document, and a justification of its working and the implementation details are exposed in Section \ref{sec:rcu}.
 \subsection{Coarse-grained locking}
 Locking solves our problems since it prevents two threads from accessing shared data structures at the same time. As our problem is in the context of a read intensive workload, a reader-writer lock was chosen.
 \\ The lock is acquired around the entire update and read section to ensure correctness and see that the conflicts do not occur. The \emph{add\_route()} function using the reader-writer lock is shown in Listing \ref{addroutereaderwriterlocklisting}. This function behaves as a writer since it updates shared data structures. The \emph{lookup\_route()} function is a reader since it only reads shared data structures but does not modify them. The version using reader-writer lock is shown in Listing \ref{lookuproutereaderwriterlocklisting}.
-\begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting]
-int
-RadixIPLookup107::lookup_route(IPAddress addr, IPAddress &gw) const
+\begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting,float=tph]
+int RadixIPLookup107::lookup_route(IPAddress addr, 
+                                   IPAddress &gw) const
 {  
     _lock.acquire_read();
-    int key = Radix::lookup(_radix, _default_key, ntohl(addr.addr()));
+    int key = Radix::lookup(_radix, _default_key,
+                             ntohl(addr.addr()));
     int port = -1;
     gw = 0;    
     if (key) {
@@ -390,7 +403,7 @@ RadixIPLookup107::lookup_route(IPAddress addr, IPAddress &gw) const
 }
 \end{lstlisting}
 
-\begin{lstlisting}[caption = Reader-writer lock usage in add\_route(), label=addroutereaderwriterlocklisting]
+\begin{lstlisting}[caption = Reader-writer lock usage in add\_route(), label=addroutereaderwriterlocklisting,float=tph]
 int
 RadixIPLookup107::add_route(const IPRoute &route, 
                             bool set, 
@@ -425,7 +438,7 @@ add\_route() was decoupled to use the following steps:
 \item Delete the old key in the vector if it was found for that route in step 2.
 \end{enumerate}
 After we have decoupled it in this way, we can create a thread safe implementation if each of the steps is atomic. The implementation involved locking and changes to the vector. The code for the modified version of add\_route can be found in Listing \ref{finegrainedaddroutelisting}.
-\begin{lstlisting}[caption=Fine-grained add\_route(), label=finegrainedaddroutelisting]
+\begin{lstlisting}[caption=Fine-grained add\_route(), label=finegrainedaddroutelisting,float=tph]
   int
   RadixIPLookup106::add_route(const IPRoute &route, 
                               bool set, 
@@ -473,15 +486,17 @@ The issues with \emph{add\_route()} also exist with \emph{remove\_route()}. This
 \item Update the vector and its free-list.
 \end{enumerate}
 \paragraph{Changes to the Vector:}
-The vector can be resized dynamically with a call to \emph{reserve()}. If multiple updaters concurrently call reserve(), there can be lost updates or segmentation faults due to the race conditions. Our goal was to modify the vector such that it is thread safe and wait-free for readers.
-\\We created a two level vector: the first level has an array of pointers to other vectors and the second level stores the values. This introduces another level of indirection. An element whose index appears to be \emph{x} is actually located at \emph{\_v[pdx][idx]}, where \emph{pdx = x/BUCKETSIZE} and \emph{idx = x \% BUCKETSIZE}. This is illustrated in Figure \ref{bucketvector}. 
+The vector can be resized dynamically with a call to \emph{reserve()}. If multiple updaters concurrently call reserve(), there can be lost updates or segmentation faults due to the race conditions. Our goal was to modify the vector such that it is thread safe and wait-free for readers.\\
+
+We created a two level vector: the first level has an array of pointers to other vectors and the second level stores the values. This introduces another level of indirection. An element whose index appears to be \emph{x} is actually located at \emph{\_v[pdx][idx]}, where \emph{pdx = x/BUCKETSIZE} and \emph{idx = x \% BUCKETSIZE}. This is illustrated in Figure \ref{bucketvector}. 
 \begin{figure}[tph]
 \includegraphics[scale = 0.4]{../images/diagrams/bucketvector.eps}
 \label{bucketvector}
 \caption{The bucket vector}
 \end{figure}
-Now, during a \emph{push\_back()} operation if there is enough space in the vector, the value will be added in one of the vectors. If there is no space, a new vector is created and a pointer to it is stored in the bucket array. This is safe for readers, since a reference acquired by a reader is always valid (assuming that the indices are not reused).
-\\Since updaters could add new vectors to the bucket array, we still need to acquire a lock on updates. We have tried to minimize locking and we use compare-and-swap instructions to increase the \emph{\_capacity} variable in the vector. A lock is acquired in \emph{reserve()} in which the array is dynamically resized. This is done to prevent a race amongst concurrent updaters from executing \emph{push\_back()} in order to place new a vector into the bucket array. The code for \emph{reserve()} which includes this modification is shown in Listing \ref{bucketvectorreservelisting}.
+Now, during a \emph{push\_back()} operation if there is enough space in the vector, the value will be added in one of the vectors. If there is no space, a new vector is created and a pointer to it is stored in the bucket array. This is safe for readers, since a reference acquired by a reader is always valid (assuming that the indices are not reused).\\
+
+Since updaters could add new vectors to the bucket array, we still need to acquire a lock on updates. We have tried to minimize locking and we use compare-and-swap instructions to increase the \emph{\_capacity} variable in the vector. A lock is acquired in \emph{reserve()} in which the array is dynamically resized. This is done to prevent a race amongst concurrent updaters from executing \emph{push\_back()} in order to place new a vector into the bucket array. The code for \emph{reserve()} which includes this modification is shown in Listing \ref{bucketvectorreservelisting}.
 \begin{lstlisting}[caption=Locking in reserve(), label=bucketvectorreservelisting]
 template <class T> inline bool
 BucketArray<T>::reserve() {
@@ -494,7 +509,8 @@ BucketArray<T>::reserve() {
       return false;
     }
     
-    new_l[_npointers] = (T *) CLICK_LALLOC(sizeof(T) * ARRAY_SIZE);
+    new_l[_npointers] = (T *) CLICK_LALLOC(sizeof(T) 
+                                          * ARRAY_SIZE);
     
     if(!new_l[_npointers]) {
       _lock.release();
@@ -514,9 +530,12 @@ BucketArray<T>::reserve() {
 }
 \end{lstlisting}
 \subsection{Using Read Copy Update in Click}
-Coarse and fine-grained locking solve the problems we have identified, but the locking system is still over 13 times slower in a pure reader workload consisting of four readers. Our goal is to develop a solution with no read-side overhead, so we turn to Read-Copy-Update \cite{readcopyupdate}.
-\\\\ Using RCU requires that we identify \emph{grace periods}: a state in which each thread has undergone at least one \emph{quiescent state}. A quiescent state is a state where a thread does not have any references to mutable data structures. This could be an idle-loop or a state where the thread is running code which does not access any shared data.
-\\\\ One of the main challenges in implementing RCU for Click was identifying quiescent states. We solved this problem in RadixIPLookup using a timer expiry as a grace period. We then describe how we can find quiescent states in the Click scheduling loop. This is a quiescent state for any userlevel element. The next challenge was to provide an API which allows any userlevel element in Click to use RCU. 
+\label{sec:rcu}
+Coarse and fine-grained locking solve the problems we have identified, but the locking system is still over 13 times slower in a pure reader workload consisting of four readers. Our goal is to develop a solution with no read-side overhead, so we turn to Read-Copy-Update \cite{readcopyupdate}.\\
+
+Using RCU requires that we identify \emph{grace periods}: a state in which each thread has undergone at least one \emph{quiescent state}. A quiescent state is a state where a thread does not have any references to mutable data structures. This could be an idle-loop or a state where the thread is running code which does not access any shared data.\\
+
+One of the main challenges in implementing RCU for Click was identifying quiescent states. We solved this problem in RadixIPLookup using a timer expiry as a grace period. We then describe how we can find quiescent states in the Click scheduling loop. This is a quiescent state for any userlevel element. The next challenge was to provide an API which allows any userlevel element in Click to use RCU. 
 \subsection{RCU using Timers}\label{sec:rcutimers}
 \paragraph{Assumptions:}
 The lookups on RadixIPLookup take place within about 1000 ns. It is somewhat safe to assume that a reader would have finished within 500 ms.
@@ -547,18 +566,12 @@ The instances of RouterThread are created by an instance of the Master class. Ea
 S_PAUSED: Thread is paused.
 S_BLOCKED: Thread is blocked.
 S_TIMERWAIT : The thread is waiting for a timer.
-S_LOCKSELECT:
-S_LOCKTASKS:
 S_RUNTASK: Thread is running a task.
 S_RUNTIMER: Thread is running a timer.
-S_RUNSIGNAL:
-S_RUNPENDING:
-S_RUNSELECT:
 \end{code}
 \paragraph{Local Epochs and the search for quiescent-states}
 An epoch is the period during which the \emph{RouterThread} performs some activity: running timers, running tasks etc. Each instance of \emph{RouterThread} maintains an epoch number hereafter referred to as ``local epoch number''. The local epoch number is incremented every time control returns to the driver loop after finishing some activity. We also maintain a global epoch number. The global epoch number is incremented only when the local epoch numbers of all RouterThreads have been incremented. This is illustrated in the Figure \ref{rcufigure}. Every alternate global epoch we can free accumulated stale data. Specifically, we can safely free data accumulated by epoch $X$ in epoch $X+2$. Note that we cannot free stale data every time the global epoch number increases (i.e. at $X+1$) since a reader may still have a reference to some stale data. For example, in Figure \ref{rcufigure}, we cannot free all stale data accumulated in $GE=0$ in $GE=1$ since thread 3 might still have a reference to something which has been updated by Thread 2. The states which might be sharing references are highlighted using the same color.
-\\
-\\
+
 \begin{figure}[tph]
 \fbox{
 \includegraphics[scale=0.30]{../images/diagrams/rcu.eps}
@@ -566,14 +579,14 @@ An epoch is the period during which the \emph{RouterThread} performs some activi
 \label{rcufigure}
 \caption{Detecting quiescent states through global epochs}
 \end{figure}
-\\
+
 \paragraph{Implementation details}
 In order to maintain epoch numbers we introduce a \emph{\_thread\_epoch} variable in the RouterThread class. The Master maintains the global epoch number. When control is returned to the driver loop after tasks are run, we increment the \emph{\_thread\_epoch} variable and attempt to reclaim freed data. As in the Timer approach described earlier, we maintain two lists: a \emph{reclaim\_now list} and a \emph{reclaim\_later} list. An updater always adds any stale data to the \emph{relcaim\_later} list. During a reclaimation, we free the data structures in the \emph{reclaim\_now} list and swap the two lists. This ensures that we follow the freeing mechanism described in the above paragraph. Effectively, we can reclaim freed-data if every thread has changed its epoch variable since the last successful reclamation or if thread is blocked.
 \subsection{Performance Hypothesis}
 \label{sec:perfhypothesis}
-RCU is known to work best for a reader-heavy workload with a small number of updaters.
-\\Our claim is that the RCU mechanism for click outlined above has almost zero reader-side overhead. Readers being lock-free and wait-free, we expect RCU performance to be comparable to the original version when there are only readers.
-\\Updaters acquire a lock, so there is some performance penalty in the presence of updaters. We expect the RCU performance for an update-intensive workload to be comparable to that of a Read-Write lock.
+RCU is known to work best for a reader-heavy workload with a small number of updaters. Our claim is that the RCU mechanism for click outlined above has almost zero reader-side overhead. Readers being lock-free and wait-free, we expect RCU performance to be comparable to the original version when there are only readers.\\
+
+Updaters acquire a lock, so there is some performance penalty in the presence of updaters. We expect the RCU performance for an update-intensive workload to be comparable to that of a Read-Write lock.
 
 \section{Performance Evaluation}
 \label{sec:perfeval}
@@ -610,7 +623,7 @@ The macrobenchmarks are designed to reflect a typical software router
 use case. Usually a router will encounter far more read requests (IP
 lookups) as compared to write requests (routing table updates) . To
 model this we consider pure reader workloads and workloads which are
-read intensive but have a lesser fraction of writes.
+read intensive but have a lesser fraction of writes.\\
 
 We used a realistic routing table derived from the routeviews.org
 database. This table consists of 167,000 routes. We call this table
@@ -626,12 +639,12 @@ the reader-writer lock version and the vanilla version with no
 locks. When there are updaters involved in the workload the benchmark
 was run on the RCU version and the reader-writer lock version. We
 cannot run the workload with writers on the vanilla version since it
-is not thread safe. 
+is not thread safe.
 
 \subsubsection{Pure Reader Workload}
  We first look at a workload consisting of only readers. The results
  are shown in Figure \ref{img:macro_vr_0w} and Table
- \ref{tbl:macro_vr_0w}.\\
+ \ref{tbl:macro_vr_0w}.
 
 \begin{table}[tph]
 \begin{center}
@@ -642,13 +655,13 @@ is not thread safe.
 \end{table}
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.6]{../images/graphs/macro_vr_0w}
+\includegraphics[scale = 0.7]{../images/graphs/macro_vr_0w}
 \caption{Performance of increasing number of readers with zero writers using the 167k routing table.}
 \label{img:macro_vr_0w}
 \end{figure}
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.6]{../images/graphs/profile_locks_macro_rwl_vr_0w}
+\includegraphics[scale = 0.7]{../images/graphs/profile_locks_macro_rwl_vr_0w}
 \caption{Percentage time spent in contending for the lock for a pure reader workload.}
 \label{img:profile_rwl_locks_vr_0w}
 \end{figure}
@@ -680,14 +693,14 @@ the read side critical section shown in \ref{img:profile_rwl_locks_vr_0w}. The g
 
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.6]{../images/graphs/macro_vr_1w}
+\includegraphics[scale = 0.7]{../images/graphs/macro_vr_1w}
 \caption{Performance of increasing number of readers and one writer with the 167k routing table.}
 \label{img:macro_vr_1w}
 \end{figure}
 
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.6]{../images/graphs/profile_locks_macro_rwl_vr_1w}
+\includegraphics[scale = 0.7]{../images/graphs/profile_locks_macro_rwl_vr_1w}
 \caption{Percentage time spent in contending for the lock for a workload with increasing number of readers and one writer.}
 \label{img:profile_rwl_locks_vr_1w}
 \end{figure}
@@ -720,7 +733,7 @@ It is clear that RCU is not as fabulous for write intensive workloads. These wor
 
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.6]{../images/graphs/macro_0r_vw}
+\includegraphics[scale = 0.7]{../images/graphs/macro_0r_vw}
 \caption{Performance of increasing number of writers and zero readers with the 167k routing table.}
 \label{img:macro_0r_vw}
 \end{figure}
@@ -736,7 +749,7 @@ It is clear that RCU is not as fabulous for write intensive workloads. These wor
 
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.6]{../images/graphs/macro_1r_vw}
+\includegraphics[scale = 0.7]{../images/graphs/macro_1r_vw}
 \caption{Performance of increasing number of writers and one reader with the 167k routing table.}
 \label{img:macro_1r_vw}
 \end{figure}
@@ -748,7 +761,7 @@ As with macro-benchmarks, we are interested mainly in read heavy workloads. We l
 
 \paragraph{Pure Reader Workload}
 Here we consider a workload consisting of only readers. We look at how the reader-writer lock and RCU perform against the unmodified vanilla version.
-As we can see from Table \ref{tbl:micro_vr_0w} which is represented in Figure \ref{img:micro_vr_0w}, the reader-writer lock is upto 50 times slower than a version without locks.
+As we can see from Table \ref{tbl:micro_vr_0w} which is represented in Figure \ref{img:micro_vr_0w}, the reader-writer lock is up to 50 times slower than a version without locks.
 The reader-writer lock does not scale with an increase in the number of threads. The RCU version scales with an increase in the number of threads. The RCU version is also within 1.5 times the performance of the version without any locks.
 
 The Reader-Writer lock spends time acquiring a lock on reads while RCU does not have any additional overhead for readers. Any additional overhead of RCU over the vanilla version is due to the overhead in checking reclaim lists and detecting quiescent states.
@@ -764,7 +777,7 @@ The Click configuration file used for this purpose is shown in Listing \ref{lst:
 
 \begin{figure}[tph]
 \fbox{
-\includegraphics[scale = 0.6]{../images/graphs/micro_vr_0w}
+\includegraphics[scale = 0.7]{../images/graphs/micro_vr_0w}
 }
 \caption{Performance comparison over a workload with increasing number of readers and zero writers.}
 \label{img:micro_vr_0w}
@@ -810,7 +823,7 @@ RCU scales over an increase in the number of threads, however the reader-writer 
 \begin{figure}[tph]
 \begin{center}
 \fbox{
-\includegraphics[scale = 0.6]{../images/graphs/micro_vr_1w}
+\includegraphics[scale = 0.7]{../images/graphs/micro_vr_1w}
 }
 \caption{Performance comparison of increasing number of readers with one writer.}
 \label{img:micro_vr_1w}
@@ -831,7 +844,7 @@ We now compare the performance of RCU with the reader-writer lock for a write in
 \begin{figure}[tph]
 \begin{center}
 \fbox{
-\includegraphics[scale = 0.5]{../images/graphs/micro_0r_vw}
+\includegraphics[scale = 0.7]{../images/graphs/micro_0r_vw}
 }
 \caption{Performance comparison of increasing number of writers with zero readers.}
 \label{img:micro_0r_vw}
@@ -849,7 +862,7 @@ We now compare the performance of RCU with the reader-writer lock for a write in
 \begin{figure}[tph]
 \begin{center}
 \fbox{
-\includegraphics[scale = 0.5]{../images/graphs/micro_1r_vw}
+\includegraphics[scale = 0.7]{../images/graphs/micro_1r_vw}
 }
 \caption{Performance comparison of increasing number of writers with one reader.}
 \label{img:micro_1r_vw}
