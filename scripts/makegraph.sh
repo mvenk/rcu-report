@@ -15,10 +15,11 @@ rwlbranch="$HOME/click_rcu_master_tests/race/${type}benchmarks/out"
 ./graphwriter.sh  $rcubranch/testsummary_${type}_rcu_0r_vw.out $rwlbranch/testsummary_${type}_rwl_0r_vw.out ../images/$imgdir/${type}_0r_vw.eps
 done
 
+
 #maintain a png version of each file for email
-elements=`ls -1 $imgdir *.eps | cut -d. -f1 | sed -e 's/\.click//g'`
-for k in $elements
-do
-        echo $k
-	convert -geometry 2000 -density 2000 $k.eps $k.png
-done
+#elements=`ls -1 $imgdir *.eps | cut -d. -f1 | sed -e 's/\.click//g'`
+#for k in $elements
+#do
+#        echo $k
+#	convert -geometry 2000 -density 2000 $k.eps $k.png
+#done
