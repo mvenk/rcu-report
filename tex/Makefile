@@ -53,7 +53,7 @@ macrobenchmark.pdf: macrobenchmark_section.tex
 macrobenchmark_section.tex: macrobenchmark.tex
 
 view:
-	evince rcu_report.pdf
+	evince rcu_report.pdf &
 clean:
 	rm *.aux *.log *.pdf
 	rm micro_*.tex

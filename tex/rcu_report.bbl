@@ -1,5 +1,12 @@
 \begin{thebibliography}{1}
 
+\bibitem{urcu}
+Mathieu Desnoyers, Paul~E. McKenney, Alan Stern, Michel~R. Dagenais, and
+  Jonathan Walpole.
+\newblock User-level implementations of read-copy update.
+\newblock {\em IEEE Transactions on Parallel and Distributed Systems},
+  23:375--382, 2012.
+
 \bibitem{dobrescu}
 Mihai Dobrescu, Katerina Argyraki, Gianluca Iannaccone, Maziar Manesh, and
   Sylvia Ratnasamy.
