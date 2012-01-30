@@ -33,6 +33,11 @@ Eddie Kohler.
 \newblock Radixiplookup documentation.
 \newblock \url{http://read.cs.ucla.edu/click/elements/radixiplookup}.
 
+\bibitem{click}
+Eddie Kohler, Robert Morris, Benjie Chen, John Jannotti, and M.~Frans Kaashoek.
+\newblock The click modular router.
+\newblock {\em ACM Trans. Comput. Syst.}, 18:263--297, August 2000.
+
 \bibitem{runtimepacketprocessing}
 Qiang Wu and Tilman Wolf.
 \newblock On runtime management in multi-core packet processing systems.

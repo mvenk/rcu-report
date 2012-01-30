@@ -53,7 +53,7 @@ We have described an approach for providing thread-safety using \emph{Read Copy 
 \section{Introduction}
 The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Link rates today exceed 40 Gbps, commodity network cards operate at over 15 Gbps but software routers struggle to comfortably scale beyond 10 Gbps.\\
 
-Commodity machines with SMP multi-core architectures are growing in popularity. A software modular router such as Click running on commodity machines  can benefit greatly by exploiting parallelism on multi-core architectures.\\
+Commodity machines with SMP multi-core architectures are growing in popularity. A software modular router such as Click\cite{click} running on commodity machines  can benefit greatly by exploiting parallelism on multi-core architectures.\\
 
 Building a scalable and safe multi-core application is not a trivial task. Shared data structures in a multi-threaded application require synchronization for safe and correct access. Synchronization introduces overheads which attenuate the benefits of parallelism. Locks ultimately have the effect of  serialization such that only one thread accesses shared data at a time. A solution using locks also invariably involves the use of variables to synchronize access. These variables need to be accessed simultaneously by other processes or threads causing \emph{cache line bouncing}. This refers to the overhead of communicating the shared value across multiple caches which is very expensive. The larger the number of threads, the larger is the frequency of access of synchronization variables and the larger is the cost of synchronization. The lock based approach becomes less scalable and hence less attractive.\\
 
@@ -83,7 +83,7 @@ The radix tree is structured as a trie. The trie has  $2^8$ nodes at the first l
 \caption{The Radix Tree}
 \label{radixtree}
 \end{figure}
-\\Each level consists of radix nodes. The structure of the radix node is shown in Listing \ref{radixnode}. \emph{\_n} represents the number of radix nodes at that level. \emph{\_bitshift} represents the number of bits to be shifted at that level for prefix matching. For the radix node at level 0 \emph{\_n} is 256 and \emph{\_bitshift} is 24 (which is $32 - 8$). This means that the first 8 bits of the address are matched. For the radix nodes at level $1$, \emph{\_n} is 16 and \emph{\_bitshift} is 20 (which is $32 -8 -4$). This means that at level 1, the first 12 bits of the address have been matched.
+\\Each level consists of radix nodes. The structure of the radix node is shown in Listing \ref{radixnode}. \verb+_n+ represents the number of radix nodes at that level. \verb+_bitshift+ represents the number of bits to be shifted at that level for prefix matching. For the radix node at level 0 \verb+_n+ is 256 and \verb+_bitshift+ is 24 (which is $32 - 8$). This means that the first 8 bits of the address are matched. For the radix nodes at level $1$, \verb+_n+ is 16 and \verb+_bitshift+ is 20 (which is $32 -8 -4$). This means that at level 1, the first 12 bits of the address have been matched.
 \begin{lstlisting}[float=tph, caption = The Radix Class, label=radixnode]
 class Radix {
   private:
@@ -99,7 +99,7 @@ class Radix {
 ...
 }
 \end{lstlisting}
-The functions \emph{add\_route} and \emph{delete\_route} are used to add and delete routes into the routing table.
+The functions \verb+add_route()+ and \verb+delete_route()+ are used to add and delete routes into the routing table.
 \paragraph{Lookups}
 Routing Table Lookups for the Internet Protocol use a longest prefix match algorithm matching a candidate route with the highest subnet mask. The node at the top most level stores keys which need to match up to an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a $12$ bit long prefix and so on. The last level stores keys which can match up to a $32$ bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP Address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists we repeat the process trying to obtain the longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
 \begin{lstlisting}[caption = The lookup function, label=lookup]
@@ -117,7 +117,7 @@ Routing Table Lookups for the Internet Protocol use a longest prefix match algor
 \end{lstlisting}
 \subsubsection{The Vector class}
 The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. The names of the first four fields are self-explanatory, Extra is used to recycle previously used but currently unused space within the vector. Extra is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is in use Extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a free list.\\
-\\The use of \emph{extra} is illustrated with the help of an example. Table \ref{tbl:vector} represents the vector at some point in time. The indices 2, 4 and 5 in the vector are currently being used (hence their \emph{\_vfree} is set to $-1$). The indices 0, 1 and 3 were in use earlier and have been deleted. They are part of the freelist. The \emph{\_vfree} points to the first entry in the freelist which will be used next. Briefly, \verb$freelist::{0 -> 3 -> 1,_vfree= 0}$. Let us say a new entry is added to the vector. So \emph{\_vfree} is reused, and the freelist is updated. Now, \verb$freelist::{ 3 -> 1, _vfree =3}$. Following another update, the index 3 will be used and the \verb$freelist::{1,_vfree=1}$. 
+\\The use of \emph{extra} is illustrated with the help of an example. Table \ref{tbl:vector} represents the vector at some point in time. The indices 2, 4 and 5 in the vector are currently being used (hence their \verb+_vfree+ is set to $-1$). The indices 0, 1 and 3 were in use earlier and have been deleted. They are part of the freelist. The \verb+_vfree+ points to the first entry in the freelist which will be used next. Briefly, \verb$freelist::{0 -> 3 -> 1,_vfree= 0}$. Let us say a new entry is added to the vector. So \verb+_vfree+ is reused, and the freelist is updated. Now, \verb$freelist::{ 3 -> 1, _vfree =3}$. Following another update, the index 3 will be used and the \verb$freelist::{1,_vfree=1}$. 
 \\If the index 2 is now freed, \verb$freelist::{2 -> 1,_vfree = 2}$.
 \\
 \begin{table}
@@ -223,8 +223,8 @@ Assume the freelist is as follows before the execution of this code sequence:\\
 \item Updater 1 and Updater 2 execute line 4 concurrently and recieve the same value of \emph{found}. Let us assume that \emph{found} is some key within the vector and is not equal to \emph{\_v.size()}. Updater 1 executes line 7 first. This updates the key in the radix tree to be the value \emph{found} which is $3$ according to our example.
 \item Updater 2 executes line 7. The value of the key is set to \emph{found} which is $3$ since the freelist has not changed.
 \item Updater 1 executes the remaining code in add\_route() including line 27 which sets \emph{\_v[found].extra} to $-1$ (which means that the index is in use). After the Updater 1 has finished executing add\_route(), the freelist reads \verb$freelist::{ 1-> 5, _vfree =1}$.
-\item Updater 2 executes the remaining code sequence. It executes line 24 which sets \emph{\_vfree} to \emph{\_v[found].extra}. \emph{\_V[found].extra} has been set to $-1$ by Updater 1. Thus \emph{\_vfree} is now $-1$.\\
-The state of the freelist is now \verb$freelist::{ 1-> 5,_vfree = -1}$. The correct state is \verb$freelist::{ 1-> 5, _vfree = 1}$. If \emph{\_vfree} is $-1$, it means that there are no more free keys in the vector, which is not true. This sequence brings the vector into an inconsistent state.
+\item Updater 2 executes the remaining code sequence. It executes line 24 which sets \verb+_vfree+ to \emph{\_v[found].extra}. \emph{\_V[found].extra} has been set to $-1$ by Updater 1. Thus \verb+_vfree+ is now $-1$.\\
+The state of the freelist is now \verb$freelist::{ 1-> 5,_vfree = -1}$. The correct state is \verb$freelist::{ 1-> 5, _vfree = 1}$. If \verb+_vfree+ is $-1$, it means that there are no more free keys in the vector, which is not true. This sequence brings the vector into an inconsistent state.
 \end{enumerate}
 \paragraph{Case 2: Concurrent updaters call \emph{push\_back()}}
 Now consider the case when \_v.push\_back() is executed concurrently. For this we will look at the Click code from vector.cc in Listing \ref{pushback}.
@@ -701,7 +701,7 @@ the read side critical section is shown in \ref{img:profile_rwl_locks_vr_0w}. Th
 \subsubsection{Read Intensive Workload With One Writer}
 \begin{table}[tph]
 \begin{center}
-\input{macro_vr_0w.tex}
+\input{macro_vr_1w.tex}
 \end{center}
 \caption{Performance comparison of increasing number of readers and one writer with the 167k routing table.}
 \label{tbl:macro_vr_1w}
