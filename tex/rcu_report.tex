@@ -1,4 +1,4 @@
-\documentclass[12pt,a4paper]{article}
+\documentclass[a4paper,marginparwidth=50pt,marginparsep=10pt]{article}
 \usepackage{graphicx}
 \usepackage{fancyvrb}
 \usepackage{listings}
@@ -6,8 +6,16 @@
 \usepackage{courier}
 \usepackage{hyperref}
 \usepackage{mathptmx}
+\usepackage{examplep}
 \usepackage{cprotect}
 \usepackage{calc}
+
+%margins
+% Margin width
+\newlength{\marginwidth}
+\setlength{\marginwidth}{\marginparwidth}
+\addtolength{\marginwidth}{\marginparsep}
+
 \lstset {
 basicstyle=\footnotesize\ttfamily,
 showstringspaces=false,
@@ -53,21 +61,23 @@ High performance routing lookups are critically important for packet forwarding.
 
 We have described an approach for providing thread-safety using \emph{Read Copy Update}. We have verified that we incur low read side overhead and that our approach performs up to 80\% better than reader-writer locks on read intensive workloads.
 \section{Introduction}
-The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Link rates today exceed 40 Gbps, commodity network cards operate at over 15 Gbps but software routers struggle to comfortably scale beyond 10 Gbps.\\
+The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Link rates today exceed 40 Gbps, commodity network cards operate at over 15 Gbps but software routers struggle to comfortably scale beyond 10 Gbps\ref{routebricks}.\\
 
 Commodity machines with SMP multi-core architectures are growing in popularity. A software modular router such as Click\cite{click} running on commodity machines  can benefit greatly by exploiting parallelism on multi-core architectures.\\
 
-Building a scalable and safe multi-core application is not a trivial task. Shared data structures in a multi-threaded application require synchronization for safe and correct access. Synchronization introduces overheads which attenuate the benefits of parallelism. Locks ultimately have the effect of  serialization such that only one thread accesses shared data at a time. A solution using locks also invariably involves the use of variables to synchronize access. These variables need to be accessed simultaneously by other processes or threads causing \emph{cache line bouncing}. This refers to the overhead of communicating the shared value across multiple caches which is very expensive. The larger the number of threads, the larger is the frequency of access of synchronization variables and the larger is the cost of synchronization. The lock based approach becomes less scalable and hence less attractive.\\
+Building a scalable and safe multi-core application is not a trivial task. Shared data structures in a multi-threaded application require synchronization for safe and correct access. Synchronization introduces overheads which attenuate the benefits of parallelism. Locks ultimately have the effect of  serialization such that only one thread accesses shared data at a time. A solution using locks also invariably involves the use of variables to synchronize access. These variables need to be accessed simultaneously by other processes or threads causing \emph{cache line bouncing}. This refers to the overhead of communicating the shared value across multiple caches which is very expensive. The larger the number of threads, the greater is the frequency of access of synchronization variables increasing the overall cost of synchronization. The lock based approach becomes less scalable and hence less attractive.\\
 
-We wish to design a highly efficient multi-core solution. We are concerned with a workload which is read intensive - comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} (RCU)\cite{readcopyupdate} scales efficiently on read intensive workloads. This is because RCU has low read side overhead allowing efficient scaling of concurrent readers. Concurrent writers generally require some form of synchronization. RCU permits both readers and writers to make progress. For these reasons, we implemented a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional reader-writer lock and show that RCU does up to 80\% better.\\
+We wish to design a highly efficient multi-core solution for IP lookups in a software router. This workload is typically read intensive - comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} (RCU)\cite{readcopyupdate} scales efficiently on read intensive workloads. This is because RCU has very low read side overhead allowing concurrent readers to execute in the presence of a writer without any synchronization. Concurrent writers generally require some form of synchronization. RCU permits both readers and writers to make progress. For these reasons, we implemented a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional reader-writer lock and show that RCU does up to 90\% better.\\
 
 The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click elements we are concerned with. Section \ref{sec:problem} describes why implementing a multicore solution was challenging. Section \ref{sec:solution} describes our solutions to the problem along with the implementation details. Sections \ref{sec:perfhypothesis} and \ref{sec:perfeval} describe the performance hypotheses and analysis.
 \section{Related Work}
-RCU is widely used in the Linux kernel, but not widely used in userlevel applications. Desnoyers et al. \cite{urcu} attribute this to multiple factors such as the constrained design imposed by previous userlevel RCU algorithms, heavy read-side overhead etc. They propose and discuss several approaches to implementing RCU in applications. One such approach is the quiescent state based reclaimation (QSBR)  approach. It has near zero read side overhead but has constraints on application design: it requires that each thread call \verb+rcu_quiescent_state()+ periodically to say that it lies in a quiescent state. Another approach is what is referred to as \emph{General Purpose RCU}. In contrast with QSBR, this approach does not impose any constraints on application design; it can even be used in implementing library functions and API. It has the highest read-side overhead as compared to the other RCU approaches. The overhead is due to memory barriers which are inserted before and after the read side critical sections. The third approach is the \emph{Signal-Based RCU approach}. It avoids the high read-side overhead in the general-purpose approach by sending POSIX signal from the update side critical sections.
+With over 2000 reported uses of the RCU API \cite{rcuusage} in the Linux kernel in recent years, RCU is widely used in system software. It does not seem to be as popular in userlevel applications. Desnoyers et al. \cite{urcu} attribute this to multiple factors such as the constrained design imposed by previous userlevel RCU algorithms, heavy read-side overhead etc. They propose and discuss several approaches to implementing RCU in applications. One such approach is the quiescent state based reclaimation (QSBR)  approach. It has near zero read side overhead but has constraints on application design: it requires that each thread call \verb+rcu_quiescent_state()+ periodically when the thread lies in a quiescent state. Another approach is what is referred to as \emph{General Purpose RCU}. In contrast with QSBR, this approach does not impose any constraints on application design; it can even be used in implementing library functions and API. It has the highest read-side overhead as compared to the other RCU approaches. The overhead is due to memory barriers which are inserted before and after the read side critical sections. The third approach is the \emph{Signal-Based RCU approach}. It avoids the high read-side overhead in the general-purpose approach by sending POSIX signal from the update side critical sections.
 
-The approach that we have used in our implementation is similar to QSBR. Each thread periodically calls a function which checks for a grace period in order to begin reclaiming stale data. Section \ref{rcuschedloop} describes this mechanism in detail.\\
+Click has natural quiescent states which allow us to implement QSBR. Each thread periodically calls a function which checks for a grace period in order to begin reclaiming stale data. Section \ref{rcuschedloop} describes this mechanism in detail.\\
 
-\emph{Routebricks} \cite{routebricks} proposes an architecture which enables higher packet processing speeds by distributing router functionality across multiple servers and multiple cores within a server. Their approach involves load balancing through Valiant Load Balancing (VLB). Their method of achieving faster packet processing is at a coarser level of granularity when compared to our approach.\\
+Hart et al.\cite{hart} compare several different memory reclamation schemes for RCU. Amongst these QSBR is again the scheme with the best performance, but is constrained by the requirement that the application has some natural quiescent states. The authors mention that the QSBR approach can be implemented through a fuzzy barrier. `` A barrier protects access to some code which no thread should execute before all other threads finish some prior stage of computation.''. We describe how we implement the fuzzy barrier in Section\ref{sec:rcuinclick}. The epoch based reclamation (EBR) scheme is application independent, but has higher overhead than QSBR. EBR has some reader side overhead where QSBR has none. EBR uses epochs to implement a fuzzy barrier. Each thread updates local epoch numbers which are checked against a global epoch number to detect quiescent states. Our approach is very similar to EBR for several reasons. Firstly, we use epochs to implement a fuzzy barrier. Secondly updaters and \emph{readers} update a local epoch number as opposed to a pure QSBR approach where readers have zero overhead.\\
+
+Dobrescu et al. \cite{routebricks} in \emph{Routebricks} propose an architecture which enables higher packet processing speeds by distributing router functionality across multiple servers and multiple cores within a server. Their approach involves load balancing through Valiant Load Balancing (VLB). Their method of achieving faster packet processing is at a coarser level of granularity when compared to our approach.\\
 
 Multiple efforts have been made at exploiting parallelism in the packet-flow mechanism in a software router. Wu and Wolf \cite{runtimepacketprocessing} have designed a run-time system which distributes the allocation of processing tasks to processor cores. It also balances the workload and maps the it across multiple cores. This parallelism is done at a task-level granularity.\\ 
 %It does not look at synchronization of objects being used by the task. In our work we attempt to allow the task itself to be thread-safe so that it can be run on multiple cores.\\
@@ -118,7 +128,7 @@ Routing Table Lookups for the Internet Protocol use a longest prefix match algor
   }
 \end{lstlisting}
 \subsubsection{The Vector class}
-The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. Address is the IP adress of the route. Mask is the subnet mask for that route. Gateway is the destination to which a packet matching an address/mask will be routed to through the port. Extra is used to recycle previously used but currently unused space within the vector. It is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is in use Extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a free list. Table \ref{tbl:vector} represents a sample vector.
+The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. Address is the IP adress of the route. Mask is the subnet mask for that route. Gateway is the destination to which a packet matching an address/mask will be routed to through the port. Extra is used to recycle previously used but currently unused space within the vector. It is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is currently in use extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a freelist. Table \ref{tbl:vector} represents a sample vector.
 
 \begin{table}[float=tph]
 \begin{center}
@@ -133,7 +143,7 @@ The Click library files provide an implementation of a generic Vector. A brief e
 \hline
 \end{tabular}
 \end{center}
-\caption{Vector with routes}
+\caption{Sample vector with routes}
 \label{tbl:vector}
 \end{table}
 
@@ -150,7 +160,7 @@ The Click library files provide an implementation of a generic Vector. A brief e
 \textbf{State 4}: Route located at index 2 is removed from the vector. Index 2 is added to the freelist. The freelist now reads \{\verb$_vfree =2$, $2\rightarrow5\rightarrow3$\}.& \raisebox{2ex - \height}{\includegraphics[width=2in,scale=0.4]{../images/diagrams/freelist4.eps}} \\
 \hline
 \end{tabular}
-\cprotect\caption{Example illustrating the working of the freelist in the vector. \verb+_vfree+ stores the starting index of the freelist. A value of $-1$ in the extra field indicates that the entry is in use and hence not a part of the freelist. The address, gateway and port fields are not shown.}
+\cprotect\caption{Example illustrating the working of the freelist in the vector. \verb+_vfree+ stores the starting index of the freelist. A value of $-1$ in the extra field indicates that the entry is in use and hence not a part of the freelist. The address, gateway, mask and port fields are not shown.}
 \end{center}
 \label{fig:freelisteg}		
 \end{figure}
@@ -160,7 +170,7 @@ The use of \emph{extra} is illustrated with the help of an example in Figure \re
 
 \paragraph{Dynamic resize}
 As is the case with most Vector classes, the Vector class in click has a \verb+push_back()+ function which adds an entry to the vector.\\
-If \verb+_n+ exceeds \verb+_capacity+, a call to \verb+reserve_and_push_back()+ is made. This dynamically increases the size of the vector. The code for \verb+push_back()+ and \verb+reserve_and_push_back()+ is given in Listing \ref{pushback} and Listing \ref{reserveandpushback}.
+If \verb+_n+ exceeds \verb+_capacity+, a call to \verb+reserve_and_push_back()+ is made. This dynamically increases the size of the vector. The code for \verb+ push_back()+ and \verb+reserve_and_push_back()+ is given in Listing \ref{pushback} and Listing \ref{reserveandpushback}.
 
 \section{The Problem}
 \label{sec:problem}
@@ -561,7 +571,7 @@ BucketArray<T>::reserve() {
   return true;
 }
 \end{lstlisting}
-\subsection{Using Read Copy Update in Click}
+\subsection{Read Copy Update}
 \label{sec:rcu}
 Coarse and fine-grained locking solve the problems we have identified, but the locking system is still over 13 times slower in a pure reader workload consisting of four readers. Our goal is to develop a solution with no read-side overhead, so we turn to Read-Copy-Update \cite{readcopyupdate}.\\
 
@@ -664,7 +674,7 @@ model this we consider pure reader workloads and workloads which are
 read intensive but have a lesser fraction of writes.\\
 
 We used a realistic routing table derived from the routeviews.org
-database. This table consists of 167,000 routes. We call this table
+database\cite{routeviews}. This table consists of 167,000 routes. We call this table
 the \emph{167k table}. The input set was generated randomly using the
 167k router configuration. A reader task consisted of performing
 lookups for 100,000 inputs from this input set. An updater task

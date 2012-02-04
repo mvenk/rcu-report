@@ -11,7 +11,7 @@
 \BOOKMARK [1][-]{section.6}{The Solution}{}
 \BOOKMARK [2][-]{subsection.6.1}{Coarse-grained locking}{section.6}
 \BOOKMARK [2][-]{subsection.6.2}{Fine-grained locking}{section.6}
-\BOOKMARK [2][-]{subsection.6.3}{Using Read Copy Update in Click}{section.6}
+\BOOKMARK [2][-]{subsection.6.3}{Read Copy Update}{section.6}
 \BOOKMARK [2][-]{subsection.6.4}{RCU using Timers}{section.6}
 \BOOKMARK [2][-]{subsection.6.5}{RCU using Click Scheduling Loop}{section.6}
 \BOOKMARK [2][-]{subsection.6.6}{Performance Hypothesis}{section.6}

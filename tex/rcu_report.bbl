@@ -1,4 +1,8 @@
-\begin{thebibliography}{1}
+\begin{thebibliography}{10}
+
+\bibitem{routeviews}
+The routeviews project.
+\newblock \url{http://archive.routeviews.org/}.
 
 \bibitem{urcu}
 Mathieu Desnoyers, Paul~E. McKenney, Alan Stern, Michel~R. Dagenais, and
@@ -28,6 +32,11 @@ Dinakar Guniguntala, Paul~E. Mckenney, Josh Triplett, and Jonathan Walpole.
   on shared-memory multiprocessor systems with linux.
 \newblock {\em IBM Systems Journal}, 47(2):221--236, 2008.
 
+\bibitem{hart}
+Thomas~E. Hart, Paul~E. McKenney, Angela~Demke Brown, and Jonathan Walpole.
+\newblock Performance of memory reclamation for lockless synchronization.
+\newblock {\em J. Parallel Distrib. Comput.}, 67:1270--1285, December 2007.
+
 \bibitem{radixiplookup}
 Eddie Kohler.
 \newblock Radixiplookup documentation.
@@ -37,6 +46,11 @@ Eddie Kohler.
 Eddie Kohler, Robert Morris, Benjie Chen, John Jannotti, and M.~Frans Kaashoek.
 \newblock The click modular router.
 \newblock {\em ACM Trans. Comput. Syst.}, 18:263--297, August 2000.
+
+\bibitem{rcuusage}
+Paul~E. McKenney and Jonathan Walpole.
+\newblock Introducing technology into the linux kernel: a case study.
+\newblock {\em SIGOPS Oper. Syst. Rev.}, 42:4--17, July 2008.
 
 \bibitem{runtimepacketprocessing}
 Qiang Wu and Tilman Wolf.
