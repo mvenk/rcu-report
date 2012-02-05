@@ -277,14 +277,15 @@ We explain the conflicts mentioned above with examples using the \verb+add_route
 We consider two cases, one in which the concurrently executing threads retrieve an index from the freelist, the other in which the concurrently executing threads make a call to \verb+push_back()+ on the vector.
 
 \paragraph{Case 1: Concurrent updaters use the freelist}
+We now illustrate how a race condition can corrupt the state of the vector. The same example is illustrated pictorially in Figure \ref{fig:raceinfreelist}
 Assume the freelist is as follows before the execution of this code sequence:\\
 \verb$freelist::{ 3 -> 1-> 5, _vfree =3}$. Consider the following sequence of events:
 \begin{enumerate}
-\item 
-\item Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M} .
+\item Thread 1 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M}.
+\item Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M}.
 \item Updater 1 and Updater 2 execute line 4 concurrently and recieve the same value of \emph{found}. Let us assume that \emph{found} is some key within the vector and is not equal to \emph{\_v.size()}. Updater 1 executes line 7 first. This updates the key in the radix tree to be the value \emph{found} which is $3$ according to our example.
 \item Updater 2 executes line 7. The value of the key is set to \emph{found} which is $3$ since the freelist has not changed.
-\item Updater 1 executes the remaining code in \verb+add_route()+ including line 27 which sets  \verb+_v[found].extra+ to $-1$ (which means that the index is in use). After the Updater 1 has finished executing add\_route(), the freelist reads 
+\item Updater 1 executes the remaining code in \verb+add_route()+ including line 27 which sets  \verb+_v[found].extra+ to $-1$ (which means that the index is in use). After the Updater 1 has finished executing add\_route(), the freelist reads\\
 \verb$freelist::{ 1-> 5, _vfree =1}$.
 \item Updater 2 executes the remaining code sequence. It executes line 24 which sets \verb+_vfree+ to \emph{\_v[found].extra}. \verb+_v[found].extra+ has been set to $-1$ by Updater 1. Thus \verb+_vfree+ is now $-1$.\\
 The state of the freelist is now \verb$freelist::{ 1-> 5,_vfree = -1}$. The correct state is \verb$freelist::{ 1-> 5, _vfree = 1}$. If \verb+_vfree+ is $-1$, it means that there are no more free keys in the vector, which is not true. This sequence brings the vector into an inconsistent state.
@@ -292,48 +293,70 @@ The state of the freelist is now \verb$freelist::{ 1-> 5,_vfree = -1}$. The corr
 
 \begin{figure}[tph]
 \begin{center}
-\caption{The example illustrates how two concurrent updaters can corrupt the sate of the freelist. The initial state of the freelist is as shown.The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.}
-\includegraphics[scale=0.4]{../images/diagrams/freelistrace1}
+\label{fig:raceinfreelist}
+\cprotect\caption{The example illustrates how two concurrent updaters can corrupt the sate of the freelist if they call \verb+add_route()+. The initial state of the freelist is as shown in the figure. The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.}
+
+\begin{tabular}{|p{4.6in}|}
+\hline
+Initial state of the freelist:\\
+\includegraphics[scale=0.4]{../images/diagrams/freelistrace1}\\
+\hline
+\end{tabular}
 \begin{tabular}{|p{2.2in}|p{2.2in}|}
 \hline
 \textbf{Thread 1} & \textbf{Thread 2}\\
 \hline
-Thread 1 calls \emph{add\_route(X,1,NULL,NULL), X.addr =A, Y.mask = M}. 
+calls
+\begin{Verbatim}[baselinestretch=1,fontsize=\small]
+add_route(X,1,NULL,NULL) 
+\end{Verbatim}
 &
-Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M}.\\
+calls
+\begin{Verbatim}[baselinestretch=1,fontsize=\small]
+add_route(Y,1,NULL,NULL)
+\end{Verbatim}
+\\
 \hline
-\begin{verbatim}{fontsize=\small}
- \verb$int found = (_vfree < 0 ? _v.size() : _vfree), last_key;
-\end{verbatim}
- Obtains a value $found = 3$
+Executes:
+\begin{Verbatim}[baselinestretch=1,fontsize=\small]
+found= (_vfree < 0 ?
+        _v.size():_vfree)
+\end{Verbatim}
+Obtains a value $found = \_vfree = 3$ 
 &
- $int found = (\_vfree < 0 ? \_v.size() : \_vfree), last\_key;$
- Obtains a value $found = 3$\\
+Executes:
+\begin{Verbatim}[baselinestretch=1,fontsize=\small]
+found= (_vfree < 0 ?
+        _v.size():_vfree)
+\end{Verbatim}
+Obtains a value $found = \_vfree = 3$\\
 \hline
 \begin{tabular}{p{1.8in}}
-Executes:\\
-...\
-verb$_v[found].extra = -1;$\\
-...\\
-The state of the freelist is shown in the figure. \\\\
-\raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/freelistrace2}}\\
+Executes:
+...
+\begin{Verbatim}[baselinestretch=1,fontsize=\small]
+_v[found].extra = -1;
+\end{Verbatim}
+As a result, the freelist is updated as shown in the figure. \\\\
+\hline
+\raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/freelistrace2}}\\\\
 \end{tabular}
 &
-...\\
+Thread is blocked or paused or context-switched.\\
 \hline
-... 
+Thread exits \verb+add_route()+.
 &
 \begin{tabular}{p{1.8in}}
 Executes:\\
 \verb$_vfree = _v[found].extra$.\\
 \verb$_v[found].extra$ was set to $-1$ by thread 1. So \verb$_vfree$ is $-1$.
-Freelist is now updated as shown in the figure. This is wrong since $\_vfree$ is -1 although there are unused indices in the freelist. A value of $-1$ for \_vfree indicates that the freelist is empty which is untrue.\\
-\raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/freelistrace3}}\\
+Freelist is now updated as shown in the figure. This is wrong since $\_vfree$ is -1 although there are unused indices in the freelist. A value of $-1$ for \_vfree indicates that the freelist is empty which is untrue.\\\\
+\hline
+\raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/freelistrace3}}\\\\
 \end{tabular}\\
 \hline
 \end{tabular}
-\end{center}
-\label{fig:raceinvector}		
+\end{center}		
 \end{figure}
 
 \paragraph{Case 2: Concurrent updaters call \emph{push\_back} }
@@ -349,8 +372,63 @@ Now consider the case when \verb+_v.push_back()+ is executed concurrently. For t
     reserve_and_push_back(RESERVE_GROW, &x);
   }
 \end{lstlisting}
-We first consider the case when there is enough space in the vector. The expression \verb$_n < _capacity$ evaluates to true. Updater1 and Updater2 use the same value of \verb+_n+. The updater which wins the race installs its key at position i, and the other update is lost. If the aforementioned expresssion evaluates to false, we can have a different race which could lead to memory leaks. It is better understood with the help of the \verb+reserve_and_push_back()+ function shown in Listing \ref{reserveandpushback}.
-\begin{lstlisting}[caption= reserve\_and\_push\_back(), label =reserveandpushback]
+We first consider the case when there is enough space in the vector. The expression \verb$_n < _capacity$ evaluates to true. Updater1 and Updater2 use the same value of \verb+_n+. The updater which wins the race installs its key at position i, and the other update is lost. If the aforementioned expresssion evaluates to false, we can have a different race which could lead to memory leaks. It is better understood with the help of the striking graphic example in Figure \ref{fig:raceinreserve} and the \verb+reserve_and_push_back()+ function shown in Listing \ref{reserveandpushback}.
+
+\begin{figure}[tph]
+\label{fig:raceinreserve}
+\begin{center}
+\begin{tabular}{|c|c|}
+\hline
+\textbf{Thread 1} & \textbf{Thread 2}\\
+\hline
+A call to \verb$reserve_and_pushback()$ is made. &  A call to \verb$reserve_and_pushback$ is made.\\
+\hline
+\begin{tabular}{p{1.5in}}
+\\  
+\raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorptr1}}\\
+\verb$CLICK_LALLOC()$ returns pointer ptr1 to a newly allocated vector.\\
+\end{tabular} 
+& 
+\begin{tabular}{p{1.5in}}
+  \\
+  \raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorptr2}}\\
+  \verb$CLICK_LALLOC()$ returns pointer ptr2  to a newly allocated vector.\\
+\end{tabular}\\
+\hline
+\begin{tabular}{p{1.8in}}  
+\raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorrace1}}\\\\
+ \verb$new_l = ptr1$.\\
+The node is added to the radix tree.\\
+\end{tabular} 
+& 
+\begin{tabular}{p{1.8in}}
+  \\
+  \raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorrace2}}\\\\
+  \verb$new_l = ptr2$.\\
+  We have a memory leak since the older node is now orphaned.\\
+\end{tabular}\\
+\hline
+
+\begin{tabular}{p{1.8in}}  
+\raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorrace3}}\\\\
+ \verb$CLICK_LFREE(_l, ...)$.\\
+ The pointer to the old vector is freed.\\
+  \raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorrace4}}\\\\
+\end{tabular} 
+& 
+\begin{tabular}{p{1.8in}}
+  \\
+  \raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorrace4}}\\\\
+\verb$CLICK_LFREE(_l, ...)$.\\  
+   \raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorrace5}}\\\\
+  We have a segmentation fault since the thread attempts to free a pointer which is already freed.\\
+\end{tabular}\\
+\hline
+\end{tabular}
+\cprotect\caption{Example illustrating the race during a dynamic resize of the vector.}
+\end{center}		
+\end{figure}
+\begin{lstlisting}[caption= reserve\_and\_push\_back(), label =reserveandpushback,float=tph]
   Vector<T>::reserve_and_push_back(size_type want, 
                                   const T *push_x)
   {
@@ -373,8 +451,7 @@ We first consider the case when there is enough space in the vector. The express
     return true;
   }
 \end{lstlisting}
-Assume that both Updater1 and Updater2 execute code concurrently and that each of them have a reference to a new array which they have created in line 7: \emph{new\_l}.
-\\Some of these races could bring the vector to an inconsistent state or cause memory leaks. For example: If both the updaters call CLICK\_LFREE() in line 14, we could have a segmentation fault. The assignment of \verb+new_l+ in line 15 is also a race. This could lead to a memory leak: The size of the leak is equal to the size of \verb+new_l+. The other consequence is that one update will be lost.
+Some of these races could bring the vector to an inconsistent state or cause memory leaks. For example, if both the updaters call CLICK\_LFREE() in line 14, we could have a segmentation fault. The assignment of \verb+new_l+ in line 15 can also lead to race conditions. This could lead to a memory leak. The size of the leak is equal to the size of \verb+new_l+. The other consequence is that one update will be lost.
 \paragraph{Verifying conflicts in Click}
 An approach similar to the one described in the Reader-Updater Conflicts section was followed here. We created a Click elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete the same route having the same address but different values of the port. Both BashRadixIPLookup and PoundRadixIPLookup run concurrently on the same instance of RadixIPLookup. This concurrency is ensured by using the \emph{StaticThreadSched()} element in the script.
 \begin{code}
