@@ -39,7 +39,7 @@ numberstyle=\tiny
 }
 \DefineVerbatimEnvironment{code}{Verbatim}{fontsize=\normalsize}{\fontfamily{pcr}}
 \DefineVerbatimEnvironment{example}{Verbatim}{fontsize=\small}
-\hyphenation{Ra-dix-IP-Look-up Pound-Rad-ix-IP-Look-up Bash-Rad-ix-IP-Look-up Read-Rad-ix-IP-Look-up}
+\hyphenation{free-list Ra-dix-IP-Look-up Pound-Rad-ix-IP-Look-up Bash-Rad-ix-IP-Look-up Read-Rad-ix-IP-Look-up Router-thread}
 \begin{document}
 \author { 
 Madhuri Venkatesh 
@@ -149,13 +149,13 @@ The Click library files provide an implementation of a generic Vector. A brief e
 
 \begin{figure}[tph]
 \begin{center}
-\begin{tabular}{|p{2.5in}|c|}
+\begin{tabular}{|p{2.5in} c|}
 \hline
 \textbf{State 1}: Initial state of the vector. The freelist reads \{\verb$_vfree =0$, $0\rightarrow1\rightarrow5\rightarrow3$\}. & \raisebox{2ex - \height}{\includegraphics[width=2in,scale=0.4]{../images/diagrams/freelist1.eps}} \\
 \hline
-\textbf{State 2}: A route is added to the vector. The index 0 is reused. The freelist reads \{\verb$_vfree =1$, $1\rightarrow5\rightarrow3$\}.& \raisebox{2ex - \height}{\includegraphics[width=2in,scale=0.4]{../images/diagrams/freelist2.eps}} \\
+\textbf{State 2}: A route is inserted. The index 0 is reused. The freelist reads \{\verb$_vfree =1$, $1\rightarrow5\rightarrow3$\}.& \raisebox{2ex - \height}{\includegraphics[width=2in,scale=0.4]{../images/diagrams/freelist2.eps}} \\
 \hline		
-\textbf{State 3}: Another route is added to the vector. The freelist now reads \{\verb$_vfree =5$, $5\rightarrow3$\}.& \raisebox{2ex - \height}{\includegraphics[width=2in,scale=0.4]{../images/diagrams/freelist3.eps}} \\
+\textbf{State 3}: Another route is inserted. The freelist now reads \{\verb$_vfree =5$, $5\rightarrow3$\}.& \raisebox{2ex - \height}{\includegraphics[width=2in,scale=0.4]{../images/diagrams/freelist3.eps}} \\
 \hline		
 \textbf{State 4}: Route located at index 2 is removed from the vector. Index 2 is added to the freelist. The freelist now reads \{\verb$_vfree =2$, $2\rightarrow5\rightarrow3$\}.& \raisebox{2ex - \height}{\includegraphics[width=2in,scale=0.4]{../images/diagrams/freelist4.eps}} \\
 \hline
@@ -166,11 +166,10 @@ The Click library files provide an implementation of a generic Vector. A brief e
 \end{figure}
 
 
-The use of \emph{extra} is illustrated with the help of an example in Figure \ref{fig:freelisteg} for the sample vector shown in Table \ref{tbl:vector}.\\
+The use of \emph{extra} is illustrated with the help of an example in Figure \ref{fig:freelisteg} for the sample vector shown in Table \ref{tbl:vector}. From the example we can see that reads and deletions are O(1). Insertions are O(1) amortized over the cost of many insertions. This is because the vector is dynamically resized when it is full.\\
 
 \paragraph{Dynamic resize}
-As is the case with most Vector classes, the Vector class in click has a \verb+push_back()+ function which adds an entry to the vector.\\
-If \verb+_n+ exceeds \verb+_capacity+, a call to \verb+reserve_and_push_back()+ is made. This dynamically increases the size of the vector. The code for \verb+ push_back()+ and \verb+reserve_and_push_back()+ is given in Listing \ref{pushback} and Listing \ref{reserveandpushback}.
+The vector class in Click has a \verb+push_back()+ function which adds an entry to the vector. This increases \verb$_n$, the current number of entries in the vector. If the vector is full (i.e.\verb+_n+ $\ge$ \verb+_capacity+), it is resized to double the value of its initial capacity with a call to \verb+reserve_and_push_back()+.
 
 \section{The Problem}
 \label{sec:problem}
@@ -183,33 +182,64 @@ We now deal with race-conditions and conflicts arising due to multiple updaters 
 The radix tree suffers from Update-Update conflicts. If multiple updaters try to modify the same region of the tree, there is a race in \verb+change()+ for the assignment of the child pointer. This could cause some of the updates to be lost and also cause a memory leak. The size of the memory leak can be equal to the depth of the tree times the size of a radix node.\\
 
 The race described above is illustrated with the help of Listing \ref{change}.
-\begin{lstlisting} [caption = Race in Change, label =change]
+\begin{lstlisting} [label =change, caption={A snippet of the change() function where a race can cause a memory leak. This is illustrated in \ref{fig:raceinchange}},float=tph]
   int
   RadixIPLookup::Radix::change(uint32_t addr, uint32_t mask,
                                           int key, bool set)
   {
-    int i1 = (addr >> _bitshift) & (_n - 1);
-    // check if change only affects children
+    ...
     if (mask & ((1U << _bitshift) - 1)) {
       if (!_children[i1].child
       && (_children[i1].child = make_radix(_bitshift - 4, 16)))
-      ++_nchildren;
-      if (_children[i1].child)
-      return _children[i1].child->change(addr, mask, key, set);
-      else
-      return 0;
-    }
-    .......
-    .......
-    .......
+    ...
+    ...
   }
 \end{lstlisting}
-The \verb+change()+ function in Listing \ref{change} is used to create a radix node for a route with a specific address, and mask. The key passed as a parameter is the index into the vector where the route is stored. Looking at line number 9, we see that if there are multiple threads executing change(), there is a race for the assignment of the radix node. Multiple threads may call \verb+make_radix()+, however only one pointer which is returned by \verb+make_radix()+ is assigned. This behavior can lead to memory leaks.
+
+\begin{figure}[tph]
+\begin{center}
+\begin{tabular}{|c|c|}
+\hline
+\textbf{Thread 1} & \textbf{Thread 2}\\
+\hline
+\verb$!_children[i1].child$ evaluates to true. & \verb$!_children[i1].child$ evaluates to true.\\
+\hline
+A call to \verb$make_radix()$ is made. &  A call to \verb$make_radix()$ is made.\\
+\hline
+\begin{tabular}{p{1.5in}}  
+\raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix1.eps}}\\
+\verb$make_radix()$ returns pointer ptr1 to a newly created radix node.\\
+\end{tabular} 
+& 
+\begin{tabular}{p{1.5in}}
+  \raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix2.eps}}\\
+  \verb$make_radix()$ returns pointer ptr2  to a newly created radix node.\\
+\end{tabular}\\
+\hline
+\begin{tabular}{p{1.8in}}  
+\raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix1race.eps}}\\\\
+ $\_children[i1].child = make\_radix(\_bitshift - 4, 16)$.\\
+The node is added to the radix tree.\\
+\end{tabular} 
+& 
+\begin{tabular}{p{1.8in}}
+  \raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix2race.eps}}\\\\
+  $\_children[i1].child = make\_radix(\_bitshift - 4, 16)$.\\
+  The node is added to the tree. We have a memory leak since the older node is now orphaned. \\
+\end{tabular}\\
+\hline
+\end{tabular}
+\cprotect\caption{Example illustrating the race in the \verb$change()$ function. The \verb$change()$ function is used in the insertion of new radix nodes. Two concurrent threads insert a radix node into the tree leading to a memory leak.}
+\end{center}
+\label{fig:raceinchange}		
+\end{figure}
+
+The \verb+change()+ function in Listing \ref{change} is used to create a radix node for a route with a specific address, and mask. The key passed as a parameter is the index into the vector where the route is stored. Two or more concurrently executing threads create race conditions which can lead to memory leaks. This is explained pictorially in Figure \ref{fig:raceinchange}. Looking at the assignment, we see that if there are multiple threads executing \verb$change()$, there is a race for the assignment of the radix node. Multiple threads may call \verb+make_radix()+, however only one pointer which is returned by \verb+make_radix()+ is assigned. 
 \paragraph{Vector}
-When there are multiple updaters there is contention for acquiring an index into the vector. Many updaters trying to add a route might receive the same index value. If multiple updaters are given the same value of the index, there can be an inconsistency in the state of the vector. For example, the size of the vector might be stored wrongly or the freelist might be updated wrongly. Since the vector is resized dynamically, we could lose updates and have memory-leaks if reserve() is called concurrently.\\
+When there are multiple updaters there is contention for acquiring an index into the vector. Many updaters trying to add a route might receive the same index value. If multiple updaters are given the same value of the index, there can be an inconsistency in the state of the vector. For example, the size of the vector might be stored wrongly or the freelist might be updated wrongly. Since the vector is resized dynamically, we could lose updates and have memory-leaks.\\
 
 We explain the conflicts mentioned above with examples using the \verb+add_route()+ function shown in  Listing \ref{addroute}.
-\begin{lstlisting}[caption = The add\_route function, label=addroute]
+\begin{lstlisting}[caption = The add\_route function, label=addroute,float=tph]
   int
   RadixIPLookup::add_route(const IPRoute &route, 
                            bool set, 
@@ -254,7 +284,8 @@ Assume the freelist is as follows before the execution of this code sequence:\\
 \item Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M} .
 \item Updater 1 and Updater 2 execute line 4 concurrently and recieve the same value of \emph{found}. Let us assume that \emph{found} is some key within the vector and is not equal to \emph{\_v.size()}. Updater 1 executes line 7 first. This updates the key in the radix tree to be the value \emph{found} which is $3$ according to our example.
 \item Updater 2 executes line 7. The value of the key is set to \emph{found} which is $3$ since the freelist has not changed.
-\item Updater 1 executes the remaining code in \verb+add_route()+ including line 27 which sets \verb+_v[found].extra+ to $-1$ (which means that the index is in use). After the Updater 1 has finished executing add\_route(), the freelist reads \verb$freelist::{ 1-> 5, _vfree =1}$.
+\item Updater 1 executes the remaining code in \verb+add_route()+ including line 27 which sets  \verb+_v[found].extra+ to $-1$ (which means that the index is in use). After the Updater 1 has finished executing add\_route(), the freelist reads 
+\verb$freelist::{ 1-> 5, _vfree =1}$.
 \item Updater 2 executes the remaining code sequence. It executes line 24 which sets \verb+_vfree+ to \emph{\_v[found].extra}. \verb+_v[found].extra+ has been set to $-1$ by Updater 1. Thus \verb+_vfree+ is now $-1$.\\
 The state of the freelist is now \verb$freelist::{ 1-> 5,_vfree = -1}$. The correct state is \verb$freelist::{ 1-> 5, _vfree = 1}$. If \verb+_vfree+ is $-1$, it means that there are no more free keys in the vector, which is not true. This sequence brings the vector into an inconsistent state.
 \end{enumerate}
