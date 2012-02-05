@@ -280,7 +280,7 @@ We consider two cases, one in which the concurrently executing threads retrieve 
 Assume the freelist is as follows before the execution of this code sequence:\\
 \verb$freelist::{ 3 -> 1-> 5, _vfree =3}$. Consider the following sequence of events:
 \begin{enumerate}
-\item Thread 1 calls \emph{add\_route(X,1,NULL,NULL), X.addr =A, Y.mask = M}. The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.
+\item 
 \item Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M} .
 \item Updater 1 and Updater 2 execute line 4 concurrently and recieve the same value of \emph{found}. Let us assume that \emph{found} is some key within the vector and is not equal to \emph{\_v.size()}. Updater 1 executes line 7 first. This updates the key in the radix tree to be the value \emph{found} which is $3$ according to our example.
 \item Updater 2 executes line 7. The value of the key is set to \emph{found} which is $3$ since the freelist has not changed.
@@ -289,6 +289,53 @@ Assume the freelist is as follows before the execution of this code sequence:\\
 \item Updater 2 executes the remaining code sequence. It executes line 24 which sets \verb+_vfree+ to \emph{\_v[found].extra}. \verb+_v[found].extra+ has been set to $-1$ by Updater 1. Thus \verb+_vfree+ is now $-1$.\\
 The state of the freelist is now \verb$freelist::{ 1-> 5,_vfree = -1}$. The correct state is \verb$freelist::{ 1-> 5, _vfree = 1}$. If \verb+_vfree+ is $-1$, it means that there are no more free keys in the vector, which is not true. This sequence brings the vector into an inconsistent state.
 \end{enumerate}
+
+\begin{figure}[tph]
+\begin{center}
+\caption{The example illustrates how two concurrent updaters can corrupt the sate of the freelist. The initial state of the freelist is as shown.The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.}
+\includegraphics[scale=0.4]{../images/diagrams/freelistrace1}
+\begin{tabular}{|p{2.2in}|p{2.2in}|}
+\hline
+\textbf{Thread 1} & \textbf{Thread 2}\\
+\hline
+Thread 1 calls \emph{add\_route(X,1,NULL,NULL), X.addr =A, Y.mask = M}. 
+&
+Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M}.\\
+\hline
+\begin{verbatim}{fontsize=\small}
+ \verb$int found = (_vfree < 0 ? _v.size() : _vfree), last_key;
+\end{verbatim}
+ Obtains a value $found = 3$
+&
+ $int found = (\_vfree < 0 ? \_v.size() : \_vfree), last\_key;$
+ Obtains a value $found = 3$\\
+\hline
+\begin{tabular}{p{1.8in}}
+Executes:\\
+...\
+verb$_v[found].extra = -1;$\\
+...\\
+The state of the freelist is shown in the figure. \\\\
+\raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/freelistrace2}}\\
+\end{tabular}
+&
+...\\
+\hline
+... 
+&
+\begin{tabular}{p{1.8in}}
+Executes:\\
+\verb$_vfree = _v[found].extra$.\\
+\verb$_v[found].extra$ was set to $-1$ by thread 1. So \verb$_vfree$ is $-1$.
+Freelist is now updated as shown in the figure. This is wrong since $\_vfree$ is -1 although there are unused indices in the freelist. A value of $-1$ for \_vfree indicates that the freelist is empty which is untrue.\\
+\raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/freelistrace3}}\\
+\end{tabular}\\
+\hline
+\end{tabular}
+\end{center}
+\label{fig:raceinvector}		
+\end{figure}
+
 \paragraph{Case 2: Concurrent updaters call \emph{push\_back} }
 Now consider the case when \verb+_v.push_back()+ is executed concurrently. For this we will look at the Click code from vector.cc in Listing \ref{pushback}.
 \begin{lstlisting}[caption = The push\_back() function, label=pushback]
