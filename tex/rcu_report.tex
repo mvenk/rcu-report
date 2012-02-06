@@ -9,7 +9,7 @@
 \usepackage{examplep}
 \usepackage{cprotect}
 \usepackage{calc}
-
+\usepackage{algorithmic}
 %margins
 % Margin width
 \newlength{\marginwidth}
@@ -61,13 +61,13 @@ High performance routing lookups are critically important for packet forwarding.
 
 We have described an approach for providing thread-safety using \emph{Read Copy Update}. We have verified that we incur low read side overhead and that our approach performs up to 80\% better than reader-writer locks on read intensive workloads.
 \section{Introduction}
-The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Link rates today exceed 40 Gbps, commodity network cards operate at over 15 Gbps but software routers struggle to comfortably scale beyond 10 Gbps\ref{routebricks}.\\
+The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Link rates today exceed 40 Gbps, commodity network cards operate at over 15 Gbps but software routers struggle to comfortably scale beyond 10 Gbps\cite{routebricks}.\\
 
 Commodity machines with SMP multi-core architectures are growing in popularity. A software modular router such as Click\cite{click} running on commodity machines  can benefit greatly by exploiting parallelism on multi-core architectures.\\
 
 Building a scalable and safe multi-core application is not a trivial task. Shared data structures in a multi-threaded application require synchronization for safe and correct access. Synchronization introduces overheads which attenuate the benefits of parallelism. Locks ultimately have the effect of  serialization such that only one thread accesses shared data at a time. A solution using locks also invariably involves the use of variables to synchronize access. These variables need to be accessed simultaneously by other processes or threads causing \emph{cache line bouncing}. This refers to the overhead of communicating the shared value across multiple caches which is very expensive. The larger the number of threads, the greater is the frequency of access of synchronization variables increasing the overall cost of synchronization. The lock based approach becomes less scalable and hence less attractive.\\
 
-We wish to design a highly efficient multi-core solution for IP lookups in a software router. This workload is typically read intensive - comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} (RCU)\cite{readcopyupdate} scales efficiently on read intensive workloads. This is because RCU has very low read side overhead allowing concurrent readers to execute in the presence of a writer without any synchronization. Concurrent writers generally require some form of synchronization. RCU permits both readers and writers to make progress. For these reasons, we implemented a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional reader-writer lock and show that RCU does up to 90\% better.\\
+We wish to design a highly efficient multi-core solution for IP lookups in a software router. This workload is typically read intensive - comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} (RCU)\cite{readcopyupdate} scales efficiently on read intensive workloads. This is because RCU has very low read side overhead allowing concurrent readers to execute in the presence of a writer without any synchronization. Concurrent writers generally require some form of synchronization. ``RCU permits both readers and writers to make forward concurrent progress''\cite{urcu}. For these reasons, we implemented a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional reader-writer lock and show that RCU does up to 90\% better.\\
 
 The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click elements we are concerned with. Section \ref{sec:problem} describes why implementing a multicore solution was challenging. Section \ref{sec:solution} describes our solutions to the problem along with the implementation details. Sections \ref{sec:perfhypothesis} and \ref{sec:perfeval} describe the performance hypotheses and analysis.
 \section{Related Work}
@@ -204,7 +204,7 @@ The race described above is illustrated with the help of Listing \ref{change}.
 \hline
 \verb$!_children[i1].child$ evaluates to true. & \verb$!_children[i1].child$ evaluates to true.\\
 \hline
-A call to \verb$make_radix()$ is made. &  A call to \verb$make_radix()$ is made.\\
+Calls \verb$make_radix()$. &  Calls \verb$make_radix()$.\\
 \hline
 \begin{tabular}{p{1.5in}}  
 \raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix1.eps}}\\
@@ -381,7 +381,7 @@ We first consider the case when there is enough space in the vector. The express
 \hline
 \textbf{Thread 1} & \textbf{Thread 2}\\
 \hline
-A call to \verb$reserve_and_pushback()$ is made. &  A call to \verb$reserve_and_pushback$ is made.\\
+Calls \verb$reserve_and_pushback()$. &  Calls \verb$reserve_and_pushback()$.\\
 \hline
 \begin{tabular}{p{1.5in}}
 \\  
@@ -524,7 +524,7 @@ The library files in Click include a generic dynamically resized Vector class. T
   else 
   _v.push_back(val);
 \end{lstlisting}
-We can observe at least two inadmissible conflicts which can be caused by race conditions. Firstly, if two updaters and a reader run concurrently, the reader might get an index into an entry which has been freed and reused. The reader may end up receiving a route which is incorrect for the IP address in question. Secondly, a reader might access invalid memory in the presence of a concurrent updater. One must recall that the \verb+push_back()+ operation dynamically resizes the vector if necessary. If an updater initiates a dynamic resize operation amidst a concurrent reader, the reader might access invalid memory occasioning a segmentation fault.
+We can observe at least two inadmissible conflicts which can be caused by race conditions. Firstly, if two updaters and a reader run concurrently, the reader might get an index into an entry which has been freed and reused. The reader may end up receiving a route which is incorrect for the IP address in question. Secondly, a reader might access invalid memory in the presence of a concurrent updater. One must recall that the \verb+push_back()+ operation dynamically resizes the vector if necessary. If an updater initiates a dynamic resize operation amidst a concurrent reader, the reader might access invalid memory.
 
 \paragraph{Verifying conflicts in Click}
 The first conflict mentioned above was verified by running Click scripts. New elements were created and run in multi-threaded mode.The \emph{StaticThreadSched()} element was used to specify the thread on which the element must be run. Listing \ref{scriptlisting} facilitates a clearer picture of the use of \emph{StaticThreadSched()} for this case.
@@ -690,47 +690,62 @@ We created a two level vector: the first level has an array of pointers to other
 \end{figure}
 Now, during a \verb+push_back()+ operation if there is enough space in the vector, the value will be added in one of the vectors. If there is no space, a new vector is created and a pointer to it is stored in the bucket array. This is safe for readers, since a reference acquired by a reader is always valid (assuming that the indices are not reused).\\
 
-Since updaters can add new vectors to the bucket array, we still need to acquire a lock on updates. A lock is acquired in \verb+reserve()+ in which the array is dynamically resized. This is done to prevent a race amongst concurrent updaters from executing \verb+push_back()+ in order to place new a vector into the bucket array. The code for \verb+reserve()+ which includes this modification is shown in Listing \ref{bucketvectorreservelisting}.
+Since updaters can add new vectors to the bucket array, we still need to acquire a lock on updates. A lock is acquired in \verb+reserve()+ in which the array is dynamically resized. This is done to prevent a race amongst concurrent updaters from executing \verb+push_back()+ in order to place new a vector into the bucket array.
 
 We use compare-and-swap instructions to increment the \verb+_capacity+ variable in the vector. This ensures that \verb+_capacity+ is incremented in an atomic manner by concurrent updaters.
-
-\begin{lstlisting}[caption=Locking in reserve(), label=bucketvectorreservelisting]
-template <class T> inline bool
-BucketArray<T>::reserve() {
-  _lock.acquire();
-  if(_nelems >= capacity()) {
-    T ** new_l = (T **) new unsigned char[\
-      sizeof(T*) * (_npointers + 1)];
-    if(!new_l) {
-      _lock.release();
-      return false;
-    }
-    
-    new_l[_npointers] = (T *) CLICK_LALLOC(sizeof(T) 
-                                          * ARRAY_SIZE);
-    
-    if(!new_l[_npointers]) {
-      _lock.release();
-      return false;
-    }
-    
-    memcpy(new_l, _l, sizeof(T**) * _npointers);
-    _reclaim_later.push_back((void*)_l);
-    //_reclaimhook.schedule();
-
-    _l = new_l;
-    _npointers++;
-    
-  }
-  _lock.release();
-  return true;
-}
-\end{lstlisting}
 \subsection{Read Copy Update}
 \label{sec:rcu}
-Coarse and fine-grained locking solve the problems we have identified, but the locking system is still over 13 times slower in a pure reader workload consisting of four readers. Our goal is to develop a solution with no read-side overhead, so we turn to Read-Copy-Update \cite{readcopyupdate}.\\
+Coarse and fine-grained locking solve the problems we have identified, but the locking system is still over 14 times slower in a pure reader workload (See Table \ref{tbl:macro_vr_0w} for details). Our goal is to develop a solution with very low read side overhead, so we turn to Read-Copy-Update.\\
 
-Using RCU requires that we identify \emph{grace periods}: a state in which each thread has undergone at least one \emph{quiescent state}. A quiescent state is a state where a thread does not have any references to mutable data structures. This could be an idle-loop or a state where the thread is running code which does not access any shared data.\\
+Several methods of implementing RCU have been discussed by Hart et al. \cite{hart} and Desnoyers et al. \cite{urcu}. Amongst these, Quiescent state based reclamation (QSBR) has been found to be the approach which has the best performance at the cost of a more constrained application design. Using QSBR requires that we identify \emph{grace periods}. A grace period is a state in which each thread has undergone at least one \emph{quiescent state}. A quiescent state is a state where a thread does not have any references to mutable data structures. This could be an idle-loop or a state where the thread is running code which does not access any shared data.\\
+
+Our approach can be compared to the \emph{fuzzy barrier} approach described by Hart et al. \cite{hart}. `` A barrier protects access to some code which no thread should execute before all other threads finish some prior stage of computation''. In a non-fuzzy barrier, threads which enter the barrier block until all threads have entered the barrier. In a fuzzy barrier, threads which enter the barrier skip the protected code and resume execution. Attempts are made to execute the protected code upon consecutive barrier entries. A thread enters a barrier when the thread has undergone a quiescent state. The protected code is used to reclaim stale data.\\
+\begin{figure}[float=tph]
+\label{fig:rcuexp1}
+\begin{center}
+\includegraphics[scale=0.4]{../images/diagrams/rcuexp0}
+\caption{Thread 1 and Thread 2 begin concurrent execution. It is only safe to free X  \textbf{after} epoch 1 has passed.}
+\end{center}
+\end{figure}
+
+\paragraph{When is it safe to free stale data?}
+RCU works by maintaining copies of shared data structures. There is a memory reclamation phase where stale copies are freed. We now look at when we can safely free stale data. Consider Figure \ref{fig:rcuexp1}. \emph{Thread1} and \emph{Thread2} begin concurrent execution. We do not free the old reference to X (updated by task Z) immediately. From the figure we can see that it is safe to free X only after task B has completed. Task C reads the value of X \textbf{after} Task Z has finished. So it is not dependent on the older value of X. When a thread completes a task, it releases references to all data structures and we reach a quiescent state for that thread. When all threads have passed a quiescent state, we reach a grace period. The following sections describe this mechanism in more detail.  
+\begin{figure}[float=tph]
+\label{fig:rcuexp2}
+\begin{center}
+\includegraphics[scale=0.4]{../images/diagrams/rcuexp2}
+\caption{Thread 1 and Thread 2 execute concurrently. 
+The black rectangle indicates that a thread has updated its epoch variable and attempted to reclaim but was unsuccessful. The white rectangle indicates that a thread has updated its epoch variable and has reclaimed successfully. Following a reclamation, all local epoch variables are reset to 1. 
+It is only safe to free X  \textbf{after} epoch 1 has passed. Task Z of \emph{Thread1} modifies the pointer X in epoch 0. Task A and B dereference X during epochs 0 and 1. For this reason it is not safe to free X in epoch 0 or 1. Task C reads X in epoch 2, \textbf{after} the updater has finished. For this reason, it receives the value of X updated by task Z. We advance an epoch number when we reach a grace period, i.e. when all threads cease to hold references to shared data structures. In Figure \ref{fig:rcuexp1}, this is achieved when each thread finishes some task.}
+\end{center}
+\end{figure}
+\paragraph{Grace Periods and Reclamation}
+We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms.\\
+\begin{algorithmic}
+Each thread $t_i$ has a local epoch number $le_i$.
+The application has a global epoch number $GE$.\\
+Initially  $GE=0$ and $\forall t_i, le_i=1$. \\
+
+All threads execute the following:
+A thread $t_i$ sets le_i=0 upon completion of a task.
+if $\forall t_i, le_i=0$
+do : 
+Reclaim stale data fron $GE-2$.
+Set $GE=GE+1$.\\
+$\forall t_i,$,Set $t_i=1$.\\
+\end{algorithmic}
+The transition between epoch 1 and epoch 2 in Figure \ref{fig:rcuexp2} is a grace period for updaters which finish in epoch 1. This is because any readers which start in epoch 0 have finished by the end of epoch 1. It is safe to reclaim memory in epoch 2. We can extend this observation using Figure \ref{fig:rcuexp2} and say that stale data accumulated in \emph{epoch N} can be reclaimed \textbf{during} \emph{epoch N+2}. Note that we cannot do this \textbf{during} \emph{epoch N+1} since a reader which starts in \emph{epoch N} might not finish until the end of \emph{N}. 
+\\For our scheme, we can semi-formally prove two RCU guarantees expressed by Desnoyers et al\cite{urcu}.
+\paragraph{Grace-Period Guarantee:} This guarantee states that a given read-side critical section cannot extend beyond both sides of a grace period. Consider the aforementioned algorithm.\\
+When $GE=0$, no tasks have run yet and we do not have any stale data to reclaim.//
+When $GE=1$, 
+
+\paragraph{Implementation}
+ We maintain two lists: a \emph{reclaim\_now} list and a \emph{reclaim\_later} list. Whenever we reach a grace period we do the following:
+\begin{enumerate}
+\item Reclaim everything in the reclaim\_now list.
+\item Swap the reclaim\_now list and the reclaim\_later list.
+\end{enumerate}
 
 One of the main challenges in implementing RCU for Click was identifying quiescent states. One approach which works for RadixIPLookup  is using a timer expiry as a grace period. This approach was limited by the fact that it could not be arbitrarily extended to other Click elements. A more general approach involved using the Click scheduling loop. The next challenge was to provide an API which allows any userlevel element in Click to use RCU. 
 \subsection{RCU using Timers}\label{sec:rcutimers}
@@ -739,13 +754,7 @@ The lookups on RadixIPLookup take place within 1000 ns. Thus it is somewhat safe
 We use this time-interval as a grace period or a quiescent state to free data-structures periodically.
 \paragraph{Implementation:}
 Click provides a Timer class which runs call-back functions at specified time-intervals. We use this to schedule a callback which reclaims freed data.
-We maintain two lists: a \emph{reclaim\_now} list and a \emph{reclaim\_later} list. When an updater attempts to free an index we do not reclaim the index right away. Instead we add it to the reclaim\_later list.
-In the timer callback function, we do the following:
-\begin{enumerate}
-\item Reclaim everything in the reclaim\_now list.
-\item Swap the reclaim\_now list and the reclaim\_later list.
-\end{enumerate}
-
+We maintain two lists: a \emph{reclaim\_now} list and a \emph{reclaim\_later} list.
 RCU's main benefit is that we never block readers. This means that any mutable data structures being read must always be in a consistent state. The original vector was dynamically resized and there could be cases where there is allocated but uninitialized memory. To solve this problem, the modified version used the bucket array described earlier along with memory barriers. 
 \subsection{RCU using Click Scheduling Loop}
 \label{rcuschedloop}
