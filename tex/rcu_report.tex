@@ -76,7 +76,7 @@ With over 2000 reported uses of the RCU API \cite{rcuusage} in the Linux kernel 
 
 Click has natural quiescent states which allow us to implement QSBR. Each thread periodically calls a function which checks for a grace period in order to begin reclaiming stale data. Section \ref{rcuschedloop} describes this mechanism in detail.\\
 
-Hart et al.\cite{hart} compare several different memory reclamation schemes for RCU. Amongst these QSBR is again the scheme with the best performance, but is constrained by the requirement that the application has some natural quiescent states. The authors mention that the QSBR approach can be implemented through a fuzzy barrier. `` A barrier protects access to some code which no thread should execute before all other threads finish some prior stage of computation.''. We describe how we implement the fuzzy barrier in Section\ref{sec:rcu}. The epoch based reclamation (EBR) scheme is application independent, but has higher overhead than QSBR. EBR has some reader side overhead where QSBR has none. EBR uses epochs to implement a fuzzy barrier. Each thread updates local epoch numbers which are checked against a global epoch number to detect quiescent states. Our approach is very similar to EBR for several reasons. Firstly, we use epochs to implement a fuzzy barrier. Secondly updaters and \emph{readers} update a local epoch number as opposed to a pure QSBR approach where readers have zero overhead.\\
+Hart et al.\cite{hart} compare several different memory reclamation schemes for RCU. Amongst these QSBR is again the scheme with the best performance, but is constrained by the requirement that the application has some natural quiescent states. The authors mention that the QSBR approach can be implemented through a fuzzy barrier. `` A barrier protects access to some code which no thread should execute before all other threads finish some prior stage of computation.''. We describe how we implement the fuzzy barrier in Section\ref{sec:rcu}. The epoch based reclamation (EBR) scheme is application independent, but has higher overhead than QSBR. EBR has some reader side overhead where QSBR has none. EBR uses epochs to implement a fuzzy barrier. Each thread updates local epoch numbers which are checked against a global epoch number to detect quiescent states. Although our approach is modeled on QSBR, it is similar to EBR for several reasons. Firstly, we use epochs to implement a fuzzy barrier. Secondly updaters and \emph{readers} update a local epoch number as opposed to a pure QSBR approach where readers have zero overhead.\\
 
 Dobrescu et al. \cite{routebricks} in \emph{Routebricks} propose an architecture which enables higher packet processing speeds by distributing router functionality across multiple servers and multiple cores within a server. Their approach involves load balancing through Valiant Load Balancing (VLB). Their method of achieving faster packet processing is at a coarser level of granularity when compared to our approach.\\
 
@@ -95,8 +95,8 @@ The radix tree is structured as a trie. The trie has  $2^8$ nodes at the first l
 \begin{center}
 \includegraphics[scale = 0.23]{../images/diagrams/radixtree2.eps}
 \caption{The Radix Tree}
-\end{center}
 \label{radixtree}
+\end{center}
 \end{figure}
 \\Each level consists of radix nodes. The structure of the radix node is shown in Listing \ref{radixnode}. \verb+_n+ represents the number of radix nodes at that level. \verb+_bitshift+ represents the number of bits to be shifted at that level for prefix matching. For the radix node at level 0 \verb+_n+ is 256 and \verb+_bitshift+ is 24 (which is $32 - 8$). This means that the first 8 bits of the address are matched. For the radix nodes at level $1$, \verb+_n+ is 16 and \verb+_bitshift+ is 20 (which is $32 -8 -4$). This means that at level 1, the first 12 bits of the address have been matched.
 \begin{lstlisting}[float=tph, caption = The Radix Class, label=radixnode]
@@ -164,15 +164,15 @@ The Click library files provide an implementation of a generic Vector. A brief e
 \hline
 \end{tabular}
 \cprotect\caption{Example illustrating the working of the freelist in the vector. \verb+_vfree+ stores the starting index of the freelist. A value of $-1$ in the extra field indicates that the entry is in use and hence not a part of the freelist. The address, gateway, mask and port fields are not shown.}
+\label{fig:freelisteg}
 \end{center}
-\label{fig:freelisteg}		
 \end{figure}
 
 
 The use of \emph{extra} is illustrated with the help of an example in Figure \ref{fig:freelisteg} for the sample vector shown in Table \ref{tbl:vector}. From the example we can see that reads and deletions are O(1). Insertions are O(1) amortized over the cost of many insertions. This is because the vector is dynamically resized when it is full.\\
 
 \paragraph{Dynamic resize}
-The vector class in Click has a \verb+push_back()+ function which adds an entry to the vector. This increases \verb$_n$, the current number of entries in the vector. If the vector is full (i.e.\verb+_n+ $\ge$ \verb+_capacity+), it is resized to double the value of its initial capacity with a call to \verb+reserve_and_push_back()+.
+The vector is initialized to hold a specific number of entries (\verb+_capacity+). The number of entries currently in use in the vector is \verb+_n+. The \verb+push_back()+ function adds an entry to the vector. This increments \verb$_n$ by one. If the vector is full (i.e.\verb+_n+ $\ge$ \verb+_capacity+), it is resized to double the value of its previous capacity with a call to \verb+reserve_and_push_back()+.
 
 \section{The Problem}
 \label{sec:problem}
@@ -233,8 +233,8 @@ The node is added to the radix tree.\\
 \hline
 \end{tabular}
 \cprotect\caption{Example illustrating the race in the \verb$change()$ function. The \verb$change()$ function is used in the insertion of new radix nodes. Two concurrent threads insert a radix node into the tree leading to a memory leak.}
-\end{center}
 \label{fig:raceinchange}		
+\end{center}
 \end{figure}
 
 The \verb+change()+ function in Listing \ref{change} is used to create a radix node for a route with a specific address, and mask. The key passed as a parameter is the index into the vector where the route is stored. Two or more concurrently executing threads create race conditions which can lead to memory leaks. This is explained pictorially in Figure \ref{fig:raceinchange}. Looking at the assignment, we see that if there are multiple threads executing \verb$change()$, there is a race for the assignment of the radix node. Multiple threads may call \verb+make_radix()+, however only one pointer which is returned by \verb+make_radix()+ is assigned. 
@@ -296,8 +296,6 @@ The state of the freelist is now \verb$freelist::{ 1-> 5,_vfree = -1}$. The corr
 
 \begin{figure}[tph]
 \begin{center}
-\label{fig:raceinfreelist}
-\cprotect\caption{The example illustrates how two concurrent updaters can corrupt the sate of the freelist if they call \verb+add_route()+. The initial state of the freelist is as shown in the figure. The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.}
 
 \begin{tabular}{|p{4.6in}|}
 \hline
@@ -359,6 +357,8 @@ Freelist is now updated as shown in the figure. This is wrong since $\_vfree$ is
 \end{tabular}\\
 \hline
 \end{tabular}
+\cprotect\caption{The example illustrates how two concurrent updaters can corrupt the sate of the freelist if they call \verb+add_route()+. The initial state of the freelist is as shown in the figure. The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.}
+\label{fig:raceinfreelist}
 \end{center}		
 \end{figure}
 
@@ -375,7 +375,8 @@ Now consider the case when\\ \verb+_v.push_back()+ is executed concurrently. For
     reserve_and_push_back(RESERVE_GROW, &x);
   }
 \end{lstlisting}
-We first consider the case when there is enough space in the vector. The expression \verb$_n < _capacity$ evaluates to true. Updater1 and Updater2 use the same value of \verb+_n+. The updater which wins the race installs its key at position i, and the other update is lost. If the aforementioned expresssion evaluates to false, we can have a different race which could lead to memory leaks. It is better understood with the help of the striking graphic example in Figure \ref{fig:raceinreserve} and the \verb+reserve_and_push_back()+ function shown in Listing \ref{reserveandpushback}.
+We first consider the case when there is enough space in the vector. Updater1 and Updater2 use the same value of \verb+_n+. The updater which wins the race installs its key at position i, and the other update is lost.
+We now consider the case when there is not enough space in the vector. The expression \verb$_n < _capacity$ evaluates to false. Some of the race conditions here could bring the vector to an inconsistent state or cause memory leaks. They are better understood with the help of the striking graphic example in Figure \ref{fig:raceinreserve} and the \verb+reserve_and_push_back()+ function shown in Listing \ref{reserveandpushback}. The assignment of \verb+new_l+ in line 15 of Listing \ref{reserveandpushback} is a race condition which can lead to a memory leak. The size of the leak is equal to the size of \verb+new_l+. The other consequence is that one update will be lost. If both the updaters call CLICK\_LFREE() in line 14, we could have a segmentation fault.
 
 \begin{figure}[tph]
 \label{fig:raceinreserve}
@@ -454,7 +455,6 @@ The node is added to the radix tree.\\
     return true;
   }
 \end{lstlisting}
-Some of these races could bring the vector to an inconsistent state or cause memory leaks. For example, if both the updaters call CLICK\_LFREE() in line 14, we could have a segmentation fault. The assignment of \verb+new_l+ in line 15 can also lead to race conditions. This could lead to a memory leak. The size of the leak is equal to the size of \verb+new_l+. The other consequence is that one update will be lost.
 \paragraph{Verifying conflicts in Click}
 An approach similar to the one described in the Reader-Updater Conflicts section was followed here. We created a Click elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete the same route having the same address but different values of the port. Both BashRadixIPLookup and PoundRadixIPLookup run concurrently on the same instance of RadixIPLookup. This concurrency is ensured by using the \emph{StaticThreadSched()} element in the script.
 \begin{code}
