@@ -37,6 +37,11 @@ Thomas~E. Hart, Paul~E. McKenney, Angela~Demke Brown, and Jonathan Walpole.
 \newblock Performance of memory reclamation for lockless synchronization.
 \newblock {\em J. Parallel Distrib. Comput.}, 67:1270--1285, December 2007.
 
+\bibitem{lookuptime}
+Eddie Kohler.
+\newblock Iproutetable element documentation.
+\newblock \url{http://read.cs.ucla.edu/click/elements/iproutetable}.
+
 \bibitem{radixiplookup}
 Eddie Kohler.
 \newblock Radixiplookup documentation.

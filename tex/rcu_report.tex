@@ -60,7 +60,7 @@ Madhuri Venkatesh
 \section{Abstract}
 High performance routing lookups are critically important for packet forwarding. With multi-core systems becoming more popular and more prevalent, leveraging them is key to improving performance. However, obtaining a correct, scalable and fast thread-safe solution remains challenging.\\
 
-We have described an approach for providing thread-safety using \emph{Read Copy Update}. We have verified that we incur low read side overhead and that our approach performs up to 80\% better than reader-writer locks on read intensive workloads.
+We have described an approach for providing thread-safety using \emph{Read Copy Update}. We have verified that we incur low read side overhead and that our approach performs up to 90\% better than reader-writer locks on read intensive workloads.
 \section{Introduction}
 The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Link rates today exceed 40 Gbps, commodity network cards operate at over 15 Gbps but software routers struggle to comfortably scale beyond 10 Gbps\cite{routebricks}.\\
 
@@ -379,7 +379,6 @@ We first consider the case when there is enough space in the vector. Updater1 an
 We now consider the case when there is not enough space in the vector. The expression \verb$_n < _capacity$ evaluates to false. Some of the race conditions here could bring the vector to an inconsistent state or cause memory leaks. They are better understood with the help of the striking graphic example in Figure \ref{fig:raceinreserve} and the \verb+reserve_and_push_back()+ function shown in Listing \ref{reserveandpushback}. The assignment of \verb+new_l+ in line 15 of Listing \ref{reserveandpushback} is a race condition which can lead to a memory leak. The size of the leak is equal to the size of \verb+new_l+. The other consequence is that one update will be lost. If both the updaters call CLICK\_LFREE() in line 14, we could have a segmentation fault.
 
 \begin{figure}[tph]
-\label{fig:raceinreserve}
 \begin{center}
 \begin{tabular}{|c|c|}
 \hline
@@ -396,7 +395,7 @@ Calls \verb$reserve_and_pushback()$. &  Calls \verb$reserve_and_pushback()$.\\
 \begin{tabular}{p{1.5in}}
   \\
   \raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorptr2}}\\
-  \verb$CLICK_LALLOC()$ returns pointer ptr2  to a newly allocated vector.\\
+  \verb$CLICK_LALLOC()$ returns pointer ptr2 to a newly allocated vector.\\
 \end{tabular}\\
 \hline
 \begin{tabular}{p{1.8in}}  
@@ -430,8 +429,11 @@ The node is added to the radix tree.\\
 \hline
 \end{tabular}
 \cprotect\caption{Example illustrating the race during a dynamic resize of the vector.}
+\label{fig:raceinreserve}
 \end{center}		
 \end{figure}
+
+
 \begin{lstlisting}[caption= reserve\_and\_push\_back(), label =reserveandpushback,float=tph]
   Vector<T>::reserve_and_push_back(size_type want, 
                                   const T *push_x)
@@ -484,7 +486,7 @@ We will now look at a race condition which can occur in the radix tree when a re
 \label{race1figure}
 \end{figure}
 \\\\
-We have two threads one running: \emph{Updater:: \{remove Route X\}} and the other running: \emph{Reader::\{read Route A\}}. The reader might receive stale information for Route X. This happens if the reader acquires a reference to the radix node containing Route X before the pointer is removed from the tree (before the call to change(), line 24 in Listing \ref{removeroute}). The race is illustrated with the help of the sequence diagram in \ref{race1figure}. However, readers which execute after the updater has finished will not recieve stale data for Route X.
+We have two threads one running: \emph{Updater:: \{remove Route X\}} and the other running: \emph{Reader::\{read Route A\}}. The reader might receive stale information for Route X. This happens if the reader acquires a reference to the radix node containing Route X before the pointer is removed from the tree. The race is illustrated with the help of the sequence diagram in \ref{race1figure}. However, readers which execute after the updater has finished will not recieve stale data for Route X.
 \begin{lstlisting}[caption= The remove\_route() function, label=removeroute,float=tph]
   int
   RadixIPLookup::remove_route(const IPRoute& route, 
@@ -579,22 +581,16 @@ A thread-safe implementation will have us expect that we always get X or the def
 \label{sec:solution}
 The race conditions described in the previous sections occur due to threads accessing shared data structures. In order to provide a thread-safe solution, several approaches were tried and their performance was compared. This section describes the different approaches tried in order to solve the problem. Coarse grained locking, fine-grained locking and Read Copy Update are the different methods we have tried. The Read Copy Update approach is the focus of this document, and a justification of its working and the implementation details are exposed in Section \ref{sec:rcu}.
 \subsection{Coarse-grained locking}
-Locking solves our problems since it prevents two threads from simultaneously accessing shared data. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock.\\
-
-The \verb+add_route()+ function using the reader-writer lock is shown in Listing \ref{addroutereaderwriterlocklisting}. A thread executing this function behaves as a writer since it updates shared data structures. A thread executing the \verb+lookup_route()+ function is a reader since it only reads shared data structures but does not modify them. The modified version of \verb+lookup_route()+ is shown in Listing \ref{lookuproutereaderwriterlocklisting}.
+Locking solves our problems since it prevents two threads from simultaneously accessing shared data. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock. 
+ Our coarse-grained locking approach involves locking around the entire read-side or update-side critical sections. This is illustrated in the \verb+add_route()+ function shown in Listing \ref{addroutereaderwriterlocklisting}, where a lock is acquired around the entire update-side critical section. Similar locking is used around the read-side critical section in \verb+lookup_route()+ (Listing \ref{lookuproutereaderwriterlocklisting}).
 \begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting,float=tph]
 int RadixIPLookup107::lookup_route(IPAddress addr, 
                                    IPAddress &gw) const
 {  
     _lock.acquire_read();
-    int key = Radix::lookup(_radix, _default_key,
-                             ntohl(addr.addr()));
-    int port = -1;
-    gw = 0;    
-    if (key) {
-        gw = _v[key - 1].gw;
-        port =  _v[key - 1].port;
-    }
+    ...
+    read side critical section
+    ...
     _lock.release_read();
     return port;
 }
@@ -608,9 +604,9 @@ RadixIPLookup107::add_route(const IPRoute &route,
                             ErrorHandler *)
 {
   _lock.acquire_write();
-  // ...
-  // add_route() code
-  // ...
+  ...
+  write-side crtical section
+  ...
   _lock.release_write();
   return 0;
 }
@@ -626,7 +622,7 @@ add\_route is used to install a new route into the radix tree. This involves two
 \item Adding the route into the vector, and obtaining a key into the index where the new route is installed.
 \item Updating the radix tree to reflect the key obtained in 1.
 \end{enumerate}
-The changes to the vector and changes to the radix tree are interdependent as seen in the \verb+add_route()+ function in Listing 5.
+The changes to the vector and changes to the radix tree are interdependent as seen in the \verb+add_route()+ function.
 add\_route() was decoupled to use the following steps:
 \begin{enumerate}
 \item  Obtain an index to install the new route.
@@ -698,41 +694,50 @@ Since updaters can add new vectors to the bucket array, we still need to acquire
 
 We use compare-and-swap instructions to increment the \verb+_capacity+ variable in the vector. This ensures that \verb+_capacity+ is incremented in an atomic manner by concurrent updaters.
 \subsection{Read Copy Update}
+
 \label{sec:rcu}
 Coarse and fine-grained locking solve the problems we have identified, but the locking system is still over 14 times slower in a pure reader workload (See Table \ref{tbl:macro_vr_0w} for details). Our goal is to develop a solution with very low read side overhead, so we turn to Read-Copy-Update.\\
 
-Several methods of implementing RCU have been discussed by Hart et al. \cite{hart} and Desnoyers et al. \cite{urcu}. Amongst these, Quiescent State Based Reclamation (QSBR) has been found to be the approach which has the best performance at the cost of a more constrained application design. Using QSBR requires that we identify \emph{grace periods}. A grace period is a state in which each thread has undergone at least one \emph{quiescent state}. A quiescent state is a state where a thread does not have any references to mutable data structures. This could be an idle-loop or a state where the thread is running code which does not access any shared data.\\
+Quiescent State Based Reclamation (QSBR) is an approach with optimal performance at the cost of a more constrained application design\cite{hart}. Using QSBR requires that we identify \emph{grace periods}. A grace period is a state in which each thread has undergone at least one \emph{quiescent state}. A quiescent state is a state where a thread does not have any references to mutable data structures. This could be an idle-loop or a state where the thread is running code which does not access any shared data.\\
+
+RCU allows readers to proceed concurrently with an updater. The updater can \textbf{remove} shared data structures, but is not allowed to \textbf{delete} it. Multiple copies of shared data structures are maintained. The old copies are deleted when they are no longer being used. A grace period for a certain copy of a shared data structure is a period where we can safely delete it. Figure \ref{fig:rcuexp1} illustrates this concept.
 
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.4]{../images/diagrams/rcuexp0}
-\caption{Thread 1 and Thread 2 begin concurrent execution. It is only safe to free X  \textbf{after} epoch 1 has passed.}
+\caption{Thread 1 and Thread 2 begin concurrent execution. A,B and C represent read-side critical sections which read the pointer \emph{x}. Z is an update-side critical section which updates the pointer \emph{x} by deleting the old pointer. A and B access \emph{x} when Z is in progress. We allow Z to remove the old pointer but we do not allow Z to \textbf{free} it. C reads the value of \emph{x} \textbf{after} Task Z has finished; it is not dependent on the older value of \emph{x}. It is safe to delete the older copy of \emph{x} after A and B have completed.}
+\label{fig:rcuexp1} 
 \end{center}
-\label{fig:rcuexp1}
 \end{figure}
 
-\paragraph{The search for quiescent states:}
-RCU works by maintaining copies of shared data structures. There is a memory reclamation phase where stale copies are freed. We now look at when we can safely free stale data. Consider Figure \ref{fig:rcuexp1}. \emph{Thread1} and \emph{Thread2} begin concurrent execution. We do not free the old reference to X (updated by task Z) immediately. From the figure we can see that it is safe to free X only after task B has completed. Task C reads the value of X \textbf{after} Task Z has finished. So it is not dependent on the older value of X. When a thread completes a task, it releases references to all data structures and we reach a quiescent state for that thread. When all threads have passed a quiescent state, we reach a grace period. The following sections describe this mechanism in more detail.  
+The subsequent sections explain how we locate quiescent states and grace periods in Click.
+\subsubsection{RCU Using Timers}
+\label{sec:rcutimers}
+IP lookups are read-side critical sections; they read the routing table which is a shared data structure. IP lookups using RadixIPLookup will finish within $1000 ns$ on modern commodity machines \cite{lookuptime}. A fixed time interval $\ge 1000 ns$ can be a grace period to free stale data-structures. A $1000ns$ interval is will cause very frequent reclamations. A slightly wider interval of $500ms$ is chosen. 
+
+Click provides a Timer class which runs call-back functions at specified time-intervals. We use this to schedule a callback which reclaims freed data at a time interval of $500 ms$.
+
+\paragraph{Grace Periods and Reclamation}
+We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}.
+
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.36]{../images/diagrams/rcuexp2}
 \caption{Thread 1 and Thread 2 execute concurrently. 
 The black rectangle indicates that a thread has updated its epoch variable and attempted to reclaim but was unsuccessful. The white rectangle indicates that a thread has updated its epoch variable and has reclaimed successfully. Following a reclamation, all local epoch variables are reset to 1. 
-It is only safe to free X  \textbf{after} epoch 1 has passed. Task Z of \emph{Thread1} modifies the pointer X in epoch 0. Task A and B dereference X during epochs 0 and 1. For this reason it is not safe to free X in epoch 0 or 1. Task C reads X in epoch 2, \textbf{after} the updater has finished. For this reason, it receives the value of X updated by task Z. We advance an epoch number when we reach a grace period, i.e. when all threads cease to hold references to shared data structures.}
-\end{center}
+It is only safe to free \emph{x}  \textbf{after} epoch 1 has passed. Task Z of \emph{Thread1} modifies the pointer \emph{x} in epoch 0. Task A and B dereference \emph{x} during epochs 0 and 1. For this reason it is not safe to free \emph{x} in epoch 0 or 1. Task C reads \emph{x} in epoch 2, \textbf{after} the updater has finished. For this reason, it receives the value of \emph{x} updated by task Z. We advance an epoch number when we reach a grace period, i.e. when all threads cease to hold references to shared data structures.}
 \label{fig:rcuexp2}
+\end{center}
 \end{figure}
 
-\paragraph{Grace Periods and Reclamation}
-We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in \ref{alg:rcu}.
 \begin{algorithm}[float=tph]
 \begin{algorithmic}
 {
 \STATE Each thread $t_i$ has a local epoch number $le_i$.
 \STATE The application has a global epoch number $GE$.\\
 \STATE Initially  $GE=0$ and $\forall t_i, le_i=1$. \\
-
-\FORALL {$t_i$} 
+\STATE $forall \mbox{ threads }t_i:$
+\WHILE {$\exists \mbox{ a task for thread }t_i$} 
 \STATE Run a task.
 \STATE set local epoch  $le_i=0$.
 \IF {$\forall t_i, le_i=0$}
@@ -740,7 +745,7 @@ We describe our approach with the help of Figure \ref{fig:rcuexp2} in more forma
   \STATE Set $GE=GE+1$.
   \STATE $\forall t_i$,Set $le_i=1$.
 \ENDIF
-\ENDFOR
+\ENDWHILE
 }
 \caption{Algorithm for detecting grace periods.}
 \label{alg:rcu}
@@ -774,11 +779,6 @@ One of the main challenges in implementing RCU for Click was identifying quiesce
 \item Swap the reclaim\_now list and the reclaim\_later list.
 \end{enumerate}
 
-\subsection{RCU using Timers}\label{sec:rcutimers}
-\paragraph{Assumptions:}
-The lookups on RadixIPLookup finish within 1000 ns. Thus it is somewhat safe to assume that a reader will finish one lookup within 500 ms. We use this time-interval as a grace period or a quiescent state to free data-structures. We bypass the fuzzy barrier (the condition which checks if all local epochs are zero), and have every global epoch last 500ms.\\
-
-Click provides a Timer class which runs call-back functions at specified time-intervals. We use this to schedule a callback which reclaims freed data.
 
 \subsection{RCU using Click Scheduling Loop}
 \label{rcuschedloop}
@@ -797,7 +797,7 @@ Click allows the user to supply the maximum number of threads it can use. Click 
     goto driver_loop;
   }
 \end{lstlisting}
-The instances of RouterThread are created by an instance of the Master class. Each thread is always in one of the following states:
+Each thread is always in one of the following states:
 \begin{itemize}
 \item \emph{S\_PAUSED} : The thread is paused.
 \item \emph{S\_BLOCKED} : The thread is blocked.
@@ -807,7 +807,7 @@ The instances of RouterThread are created by an instance of the Master class. Ea
 \end{itemize}
 
 We use the algorithm described earlier within the driver loop. We have an additional condition which checks if the thread is in any of the states mentioned above.
-The method described here does not require that the reader task be of a specific duration. It does require that the reader task eventually terminates.  
+The method described here does not require that the reader task be of a specific duration. It does require that the reader task eventually terminate.  
 \subsection{Performance Hypothesis}
 \label{sec:perfhypothesis}
 RCU is known to work best for a reader-heavy workload with a small number of updaters. Our claim is that the RCU mechanism for click outlined above has almost zero reader-side overhead. Readers being lock-free and wait-free, we expect RCU performance to be comparable to the original version when there are only readers.\\
@@ -849,7 +849,7 @@ The macrobenchmarks are designed to reflect a typical software router
 use case. Usually a router will encounter far more read requests (IP
 lookups) as compared to write requests (routing table updates) . To
 model this we consider pure reader workloads and workloads which are
-read intensive but have a lesser fraction of writes.\\
+read intensive with a very low fraction of writes.\\
 
 We used a realistic routing table derived from the routeviews.org
 database\cite{routeviews}. This table consists of 167,000 routes. We call this table
@@ -893,7 +893,7 @@ is not thread safe.
 \end{figure}
 
 From Figure \ref{img:macro_vr_0w}, we see that RCU scales much better
-than the reader-writer lock version. RCU is always within $2$ times
+than the reader-writer lock version. RCU is always within $1.1$ times
 the vanilla version. Time taken by the reader-writer lock increases
 linearly and is up to $22$ times slower than the version without
 locks.
@@ -906,7 +906,7 @@ table. The state of the shared variable needs to be updated through
 all cores. As the number of threads increases, the contention causes
 cache line bouncing and increased usage of the processor bus
 bandwidth. For the reader-writer lock, the number of lock acquisition attempts to enter
-the read side critical section is shown in \ref{img:profile_rwl_locks_vr_0w}. The graph shows an increasing number of attempts for the lock with an increase in the number of threads. We can therefore attribute the  linear increase in time as the number of readers increase to the lock contention. This data was obtained for the benchmark shown in Table \ref{tbl:macro_vr_0w} using the Dtrace profiler. 
+the read side critical section is shown in Figure \ref{img:profile_rwl_locks_vr_0w}. The graph shows an increasing number of attempts for the lock with an increase in the number of threads. We can therefore attribute the  linear increase in time as the number of readers increase to the lock contention. 
 
 \subsubsection{Read Intensive Workload With One Writer}
 \begin{table}[tph]
@@ -943,7 +943,7 @@ workload consisting of 7 readers and 1 writer. Figure \ref{img:profile_rwl_locks
 outperforms the reader-writer lock for a read intensive workload with some writers.
 
 \subsubsection{Write Intensive Workloads}
-We have seen that RCU outperforms the Reader-Writer lock for reader heavy workloads. For completeness, we look at some workloads which are not common for a router: writer heavy workloads. The performance of a workload with zero readers and increasing number of writers is shown in  Figure \ref{img:macro_0r_vw} and Table \ref{tbl:macro_0r_vw}. Here, we see that the Reader-Writer Lock outperforms RCU by a factor of . We attribute this to the increased memory footprint and increased overhead in management of the reclaim lists. **Justify.
+We have seen that RCU outperforms the Reader-Writer lock for reader heavy workloads. For completeness, we look at some workloads which are not common for a router: writer heavy workloads. The performance of a workload with zero readers and increasing number of writers is shown in  Figure \ref{img:macro_0r_vw} and Table \ref{tbl:macro_0r_vw}. Here, we see that the Reader-Writer Lock outperforms RCU by a factor of 1.46. We attribute this to the increased memory footprint and increased overhead in management of the reclaim lists. **Justify.
 
 The performance of a workload consisting of one reader and increasing number of writers is shown in  Figure \ref{img:macro_1r_vw} and Table \ref{tbl:macro_1r_vw}. Although RCU does not scale, we see that it performs better than the Reader-Writer Lock.
 
@@ -1111,9 +1111,7 @@ mechanism to detect quiescent states and an API which can be used by
 a userlevel element in Click.
 
 We have verified through our benchmarks that
-this mechanism does indeed have a very low reader side overhead
-(within two times the original version). The RCU approach is also up to
-70\% better than a reader-writer lock on read intensive workloads.
+this mechanism does indeed have a very low reader side overhead. The RCU approach is also up to 70\% better than a reader-writer lock on read intensive workloads.
 
 \section{Future Work}
 
