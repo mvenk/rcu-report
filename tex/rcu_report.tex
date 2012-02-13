@@ -580,7 +580,7 @@ A thread-safe implementation will have us expect that we always get X or the def
 \section{The Solution}
 \label{sec:solution}
 The race conditions described in the previous sections occur due to threads accessing shared data structures. In order to provide a thread-safe solution, several approaches were tried and their performance was compared. This section describes the different approaches tried in order to solve the problem. Coarse grained locking, fine-grained locking and Read Copy Update are the different methods we have tried. The Read Copy Update approach is the focus of this document, and a justification of its working and the implementation details are exposed in Section \ref{sec:rcu}.
-\subsection{Coarse-grained locking}
+\subsection{Reader-Writer Lock}
 Locking solves our problems since it prevents two threads from simultaneously accessing shared data. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock. 
  Our coarse-grained locking approach involves locking around the entire read-side or update-side critical sections. This is illustrated in the \verb+add_route()+ function shown in Listing \ref{addroutereaderwriterlocklisting}, where a lock is acquired around the entire update-side critical section. Similar locking is used around the read-side critical section in \verb+lookup_route()+ (Listing \ref{lookuproutereaderwriterlocklisting}).
 \begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting,float=tph]
@@ -595,7 +595,6 @@ int RadixIPLookup107::lookup_route(IPAddress addr,
     return port;
 }
 \end{lstlisting}
-
 \begin{lstlisting}[caption = Reader-writer lock usage in add\_route(), label=addroutereaderwriterlocklisting,float=tph]
 int
 RadixIPLookup107::add_route(const IPRoute &route, 
@@ -611,88 +610,7 @@ RadixIPLookup107::add_route(const IPRoute &route,
   return 0;
 }
 \end{lstlisting}
-
-\subsection{Fine-grained locking}
-\label{sec:finegrainedlocking}
-The reader-writer lock approach was improved with fine-grained locking in the updates. Every update in RadixIPLookup involves changes to the radix tree and changes to the underlying vector that it uses. These two changes are coupled together in the sense that one update depends on the outcome of the other. The code was restructured in add\_route() and remove\_route() in order to make fine grained locking possible.
-\paragraph{Changes to add\_route}
-The changes made to add\_route for fine grained locking are described.
-add\_route is used to install a new route into the radix tree. This involves two steps:
-\begin{enumerate}
-\item Adding the route into the vector, and obtaining a key into the index where the new route is installed.
-\item Updating the radix tree to reflect the key obtained in 1.
-\end{enumerate}
-The changes to the vector and changes to the radix tree are interdependent as seen in the \verb+add_route()+ function.
-add\_route() was decoupled to use the following steps:
-\begin{enumerate}
-\item  Obtain an index to install the new route.
-\item Update the radix tree with the key for the new route 
-(creating new branches if necessary).
-\item Update the freelist to reflect changes if it had been used in step 1.
-\item Delete the old key in the vector if it was found for that route in step 2.
-\end{enumerate}
-After we have decoupled it in this way, we can create a thread safe implementation if each of the steps is atomic. The implementation involved locking and changes to the vector. The code for the modified version of add\_route can be found in Listing \ref{finegrainedaddroutelisting}.
-\begin{lstlisting}[caption=Fine-grained add\_route(), label=finegrainedaddroutelisting,float=tph]
-  int
-  RadixIPLookup106::add_route(const IPRoute &route, 
-                              bool set, 
-                              IPRoute *old_route, 
-                              ErrorHandler *)
-  {
-    int last_key;
-    // we optimistically push back the route onto
-    // the vector and don't do any free list management
-    int found = insert_into_v(route);
-    if (route.mask) {
-      uint32_t addr = ntohl(route.addr.addr());
-      uint32_t mask = ntohl(route.mask.addr());
-      _rlock.acquire();
-      last_key = _radix->change(addr, mask, found + 1, set);
-      _rlock.release();
-    } else {
-      last_key = _default_key;
-      if (!last_key || set)
-      _default_key = found + 1;
-    }
-    if (last_key) { 
-      if(old_route) { 
-        _vlock.acquire();
-        *old_route = _v[last_key - 1];
-        _vlock.release();
-      }
-      if(set)
-      remove_from_v(last_key);
-      else {
-        remove_from_v(found);
-        return -EEXIST;
-      }
-    }
-    return 0;
-  }
-\end{lstlisting}
-
-\paragraph{Changes to remove\_route:}
-The issues with \verb+add_route()+ also exist with \verb+remove_route()+. This is because \verb+remove_route()+ also involves changes to the radix tree and changes to the underlying vector it uses in a similar manner. The restructured code for fine-grained locking works as shown below:
-\begin{enumerate}
-\item Search for the route in the radix tree and store it in last\_key.
-\item If there was no route found, return with the appropriate error code.
-\item If there was a route found, update the radix tree to reflect the change. 
-\item Update the vector and its free-list.
-\end{enumerate}
-\paragraph{Changes to the Vector:}
-The vector can be resized dynamically with a call to \verb+reserve()+. If multiple updaters concurrently call reserve(), there can be lost updates or segmentation faults due to the race conditions. Our goal was to modify the vector such that it is thread safe and wait-free for readers.\\
-
-We created a two level vector: the first level has an array of pointers to other vectors and the second level stores the values. This introduces another level of indirection. An element whose index appears to be \emph{x} is actually located at \emph{\_v[pdx][idx]}, where \emph{pdx = x/BUCKETSIZE} and \emph{idx = x \% BUCKETSIZE}. This is illustrated in Figure \ref{bucketvector}. 
-\begin{figure}[tph]
-\includegraphics[scale = 0.4]{../images/diagrams/bucketvector.eps}
-\label{bucketvector}
-\caption{The bucket vector}
-\end{figure}
-Now, during a \verb+push_back()+ operation if there is enough space in the vector, the value will be added in one of the vectors. If there is no space, a new vector is created and a pointer to it is stored in the bucket array. This is safe for readers, since a reference acquired by a reader is always valid (assuming that the indices are not reused).\\
-
-Since updaters can add new vectors to the bucket array, we still need to acquire a lock on updates. A lock is acquired in \verb+reserve()+ in which the array is dynamically resized. This is done to prevent a race amongst concurrent updaters from executing \verb+push_back()+ in order to place new a vector into the bucket array.
-
-We use compare-and-swap instructions to increment the \verb+_capacity+ variable in the vector. This ensures that \verb+_capacity+ is incremented in an atomic manner by concurrent updaters.
+\pagebreak
 \subsection{Read Copy Update}
 
 \label{sec:rcu}
