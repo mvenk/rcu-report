@@ -726,15 +726,35 @@ Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our imple
 \end{figure}
 
 \subsubsection{RCU using the Click Scheduling Loop}
-\paragraph{Grace Periods and Reclamation}
-We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}.
+\label{rcuschedloop}
 
+The timer expiry as a quiescent state described in Section \ref{sec:rcutimers} works well for RadixIPLookup since each lookup completes within a fixed time interval. For other elements in Click, it may not be possible to determine the duration of a read-side critical section. We wish to detect quiescent states for all other userlevel elements without having to know how long it takes for a reader task to complete. The scheme described here does not require that the reader task be of a specific duration. It does require that the reader task eventually terminate. The approach involves using the scheduling loop in Click to detect quiescent states. 
+
+\paragraph{The Click RouterThread driver loop}
+A \emph{task} in Click is something that requires CPU time or packet processing time. A task can involve performing an IP lookup, encapsulating a packet etc. Click has a class called \emph{RouterThread} which is responsible for running tasks. When Click is allowed to run with say $N$ threads, $N$ instances of \emph{RouterThread} are created. Each \emph{RouterThread} instance runs a \verb+driver()+ function which runs tasks scheduled by Click elements in a loop. We will refer to this loop as the ``driver loop''. After running a specified number of tasks, control returns to the driver loop. A highly abridged version of the driver loop is shown in Algorithm \ref{alg:driverloop}.
+
+
+\begin{algorithm}[float=tph]
+\begin{algorithmic}
+{
+\STATE $forall \mbox{ threads }t_i:$
+\WHILE {$\exists \mbox{ a task for thread }t_i$} 
+\STATE Run a task.
+\ENDWHILE
+}
+\caption{The RouterThread Driver Loop}
+\label{alg:driverloop}
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Grace Periods and Reclamation}
+We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}. Each RouterThread instance maintains a local epoch counter. The local epoch counter can either be zero or one. The application has a global epoch counter. The global epoch counter is not physically stored; we only use it to explain and justify our approach. Initially all local epoch counters are set to one. After a thread completes a task, it resets its local epoch number. When the local epoch counters of all threads are reset, we reach a grace period. (All threads have released references to shared data structures they once held.) At this point, we reclaim stale data structures from the penultimate global epoch, increment the global epoch counter, set all local epoch counters and continue.
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.36]{../images/diagrams/rcuexp2}
 \caption{Thread 1 and Thread 2 execute concurrently. 
-The black rectangle indicates that a thread has updated its epoch variable and attempted to reclaim but was unsuccessful. The white rectangle indicates that a thread has updated its epoch variable and has reclaimed successfully. Following a reclamation, all local epoch variables are reset to 1. 
-It is only safe to free \emph{x}  \textbf{after} epoch 1 has passed. Task Z of \emph{Thread1} modifies the pointer \emph{x} in epoch 0. Task A and B dereference \emph{x} during epochs 0 and 1. For this reason it is not safe to free \emph{x} in epoch 0 or 1. Task C reads \emph{x} in epoch 2, \textbf{after} the updater has finished. For this reason, it receives the value of \emph{x} updated by task Z. We advance an epoch number when we reach a grace period, i.e. when all threads cease to hold references to shared data structures.}
+The black rectangle indicates that a thread has updated its epoch variable and attempted to reclaim but was unsuccessful. The white rectangle indicates that a thread has updated its epoch counter and has reclaimed successfully. Following a reclamation, all local epoch counters are reset to 1. 
+It is only safe to free \emph{x}  \textbf{after} \emph{global epoch 1} has passed. Task Z of \emph{Thread1} modifies the pointer \emph{x} in \emph{global epoch 0}. Task A and B dereference \emph{x} during \emph{global epochs 0} and \emph{1}. For this reason it is not safe to free \emph{x} in \emph{global epoch 0} or \emph{1}. Task C reads \emph{x} in \emph{global epoch 2}, \textbf{after} the updater has finished. For this reason, it receives the value of \emph{x} updated by task Z. We advance the \emph{global epoch counter} when we reach a grace period, i.e. when all threads cease to hold references to shared data structures.}
 \label{fig:rcuexp2}
 \end{center}
 \end{figure}
@@ -760,9 +780,17 @@ It is only safe to free \emph{x}  \textbf{after} epoch 1 has passed. Task Z of \
 \label{alg:rcu}
 \end{algorithmic}
 \end{algorithm}
-The transition between epoch 1 and epoch 2 in Figure \ref{fig:rcuexp2} is a grace period for updaters which finish in epoch 1. This is because any readers which start in epoch 0 have finished by the end of epoch 1. It is safe to reclaim memory in epoch 2. We can extend this observation using Figure \ref{alg:rcu} and say that stale data accumulated in \emph{epoch N} can be reclaimed \textbf{during} \emph{epoch N+2}. Note that we cannot do this \textbf{during} \emph{epoch N+1} since a reader which starts in \emph{epoch N} might not finish until the end of \emph{N+1}.
+The transition between \emph{global epoch 1} and \emph{global epoch 2} in Figure \ref{fig:rcuexp2} is a grace period for updaters which finish in \emph{global epoch 1}. This is because any readers which start in \emph{global epoch 0} have finished by the end of \emph{global epoch 1}. It is safe to reclaim memory in \emph{global epoch 2}. We can extend this observation using Figure \ref{alg:rcu} and say that stale data accumulated in \emph{epoch N} can be reclaimed \textbf{during} \emph{global epoch N+2}. Note that we cannot do this \textbf{during} \emph{global epoch N+1} since a reader which starts in \emph{global epoch N} might not finish until the end of \emph{global epoch N+1}.\\
+
+In order to facilitate reclamation of stale data of \emph{global epoch N-2} in \emph{global epoch N}, we maintain two lists: a \emph{reclaim\_now} list and a \emph{reclaim\_later} list. When an updater modifies a shared data structure, we maintain the older copy. The older copy is also added to the \emph{reclaim\_later} list. Whenever a grace period is reached:
+\begin{enumerate}
+\item Reclaim everything in the \emph{reclaim\_now} list. The \emph{reclaim\_now} list becomes empty after this step completes.
+\item Swap the \emph{reclaim\_now} list and the \emph{reclaim\_later} list.\\
+The \emph{reclaim\_later} list becomes empty and the \emph{reclaim\_now} list has the contents of the previous \emph{reclaim\_later} list after this step completes.
+\end{enumerate}
+
 \paragraph{RCU guarantees} 
-For our scheme, we can provide two RCU guarantees expressed in \cite{urcu}.\\
+For our scheme, we can provide the two RCU guarantees expressed in \cite{urcu}. The \emph{Grace Period Guarantee} says that a given read-side critical section cannot extend beyond both sides of a grace period. The \emph{Publication Guarantee} says that readers will see consistent newer versions of the data structures updated by writers. These guarantees are important since they show that readers always access consistent copies of data structures. 
 \begin{enumerate}
 \item \emph{Grace-Period Guarantee:} This guarantee states that a given read-side critical section cannot extend beyond both sides of a grace period. We now show that we can maintain this as an invariant in our scheme.
 
@@ -777,46 +805,10 @@ For our scheme, we can provide two RCU guarantees expressed in \cite{urcu}.\\
 \item \emph{Publication Guarantee:} 
 Although readers proceed concurrently with writers, readers must see either the old version of the data or the newer version. Readers should not see an inconsistent state of the data structure. Readers which begin after an updater has completed should see the newer version. In order to ensure that readers do not see an inconsistent version for RadixIPLookup, we use the bucketvector described in Section \ref{sec:finegrainedlocking}. Variables which reflect the state of the vector such as \verb+_capacity+ and \verb+_n+ are updated only after the pointers are updated. Memory barriers are also used to ensure that these variables reflect their newer values only after memory has been allocated.\\
 \end{enumerate}
+
+
 We observe that our approach is similar to the \emph{fuzzy barrier} approach described by Hart et al. \cite{hart}. In our scheme, the barrier is the condition which checks that all local epoch variables are set to zero. The barrier protects access to the reclamation code. This barrier is fuzzy because the threads resume execution of other tasks if they are unable cross the barrier and reclaim (non-blocking).\\
-
-One of the main challenges in implementing RCU for Click was identifying quiescent states. One approach which works for RadixIPLookup  is using a timer expiry as a grace period. This approach was limited by the fact that it could not be arbitrarily extended to other Click elements. A more general approach involved using the Click scheduling loop. The next challenge was to provide an API which allows any userlevel element in Click to use RCU. 
-
-\paragraph{Implementation}
- We maintain two lists: a \emph{reclaim\_now} list and a \emph{reclaim\_later} list. Whenever we reach a grace period we do the following:
-\begin{enumerate}
-\item Reclaim everything in the reclaim\_now list.
-\item Swap the reclaim\_now list and the reclaim\_later list.
-\end{enumerate}
-
-
-\subsubsection{RCU using Click Scheduling Loop}
-\label{rcuschedloop}
-The timer expiry as a quiescent state described in Section \ref{sec:rcutimers} works well for RadixIPLookup since each lookup completes within a fixed time interval. For other elements in Click, it may not be possible to determine the duration of a read-side critical section. We wish to detect quiescent states for all other userlevel elements without having to know how long it takes for a reader task to complete. One approach is to use the scheduling loop in Click to detect quiescent states.
-\paragraph{The Click RouterThread driver loop}
-Click allows the user to supply the maximum number of threads it can use. Click has a class called \emph{RouterThread} which is responsible for running tasks scheduled by other Click elements. When Click is allowed to run with say $N$ threads, $N$ instances of \emph{RouterThread} are created. Each \emph{RouterThread} instance runs a \verb+driver()+ function which runs tasks scheduled by Click elements in a loop. We will refer to this loop as the ``driver loop''. After running tasks, control periodically returns to the driver loop. A highly abridged version of the driver loop is shown in listing \ref{lst:driverloop}.
-\begin{lstlisting}[caption = Pseudocode for the driver loop, label=lst:driverloop]
-  void RouterThread::driver()
-  {
-    // initialization 
-    driver_loop:
-    run_tasks();
-    // perform scheduling tasks etc
-    // run timers
-    // if driver has been stopped, exit the loop
-    goto driver_loop;
-  }
-\end{lstlisting}
-Each thread is always in one of the following states:
-\begin{itemize}
-\item \emph{S\_PAUSED} : The thread is paused.
-\item \emph{S\_BLOCKED} : The thread is blocked.
-\item \emph{S\_TIMERWAIT} : The thread is waiting for a timer.
-\item \emph{S\_RUNTASK} : The thread is running a task.
-\item \emph{S\_RUNTIMER} : The thread is running a timer.
-\end{itemize}
-
-We use the algorithm described earlier within the driver loop. We have an additional condition which checks if the thread is in any of the states mentioned above.
-The method described here does not require that the reader task be of a specific duration. It does require that the reader task eventually terminate.  
+  
 \subsection{Performance Hypothesis}
 \label{sec:perfhypothesis}
 RCU is known to work best for a reader-heavy workload with a small number of updaters. Our claim is that the RCU mechanism for click outlined above has almost zero reader-side overhead. Readers being lock-free and wait-free, we expect RCU performance to be comparable to the original version when there are only readers.\\
