@@ -579,38 +579,8 @@ Locks are acquired during updates since we want to verify reader-updater conflic
 A thread-safe implementation will have us expect that we always get X or the default route. A default route is returned if there was no prefix matching the route being looked up in the tree. But we see that the lookup sometimes returns Y which is incorrect.
 \section{The Solution}
 \label{sec:solution}
-The race conditions described in the previous sections occur due to threads accessing shared data structures. In order to provide a thread-safe solution, several approaches were tried and their performance was compared. This section describes the different approaches tried in order to solve the problem. Coarse grained locking, fine-grained locking and Read Copy Update are the different methods we have tried. The Read Copy Update approach is the focus of this document, and a justification of its working and the implementation details are exposed in Section \ref{sec:rcu}.
-\subsection{Reader-Writer Lock}
-Locking solves our problems since it prevents two threads from simultaneously accessing shared data. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock. 
- Our coarse-grained locking approach involves locking around the entire read-side or update-side critical sections. This is illustrated in the \verb+add_route()+ function shown in Listing \ref{addroutereaderwriterlocklisting}, where a lock is acquired around the entire update-side critical section. Similar locking is used around the read-side critical section in \verb+lookup_route()+ (Listing \ref{lookuproutereaderwriterlocklisting}).
-\begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting,float=tph]
-int RadixIPLookup107::lookup_route(IPAddress addr, 
-                                   IPAddress &gw) const
-{  
-    _lock.acquire_read();
-    ...
-    read side critical section
-    ...
-    _lock.release_read();
-    return port;
-}
-\end{lstlisting}
-\begin{lstlisting}[caption = Reader-writer lock usage in add\_route(), label=addroutereaderwriterlocklisting,float=tph]
-int
-RadixIPLookup107::add_route(const IPRoute &route, 
-                            bool set, 
-                            IPRoute *old_route, 
-                            ErrorHandler *)
-{
-  _lock.acquire_write();
-  ...
-  write-side crtical section
-  ...
-  _lock.release_write();
-  return 0;
-}
-\end{lstlisting}
-\pagebreak
+The race conditions described in the previous sections occur due to threads accessing shared data structures. RCU is known to be an efficient synchronization technique for read-heavy workloads. We compare the performance of RCU with a reader-writer lock. The reader-writer lock approach is also described in this section.
+
 \subsection{Read Copy Update}
 
 \label{sec:rcu}
@@ -725,8 +695,38 @@ Although readers proceed concurrently with writers, readers must see either the 
 \end{enumerate}
 
 
-We observe that our approach is similar to the \emph{fuzzy barrier} approach described by Hart et al. \cite{hart}. In our scheme, the barrier is the condition which checks that all local epoch variables are set to zero. The barrier protects access to the reclamation code. This barrier is fuzzy because the threads resume execution of other tasks if they are unable cross the barrier and reclaim (non-blocking).\\
-  
+We observe that our approach is similar to the \emph{fuzzy barrier} approach described by Hart et al. \cite{hart}. In our scheme, the barrier is the condition which checks that all local epoch variables are set to zero. The barrier protects access to the reclamation code. This barrier is fuzzy because the threads resume execution of other tasks if they are unable cross the barrier and reclaim (non-blocking).
+
+\subsection{Reader-Writer Lock}
+Locking solves our problems since it prevents two threads from simultaneously accessing shared data. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock. 
+ Our coarse-grained locking approach involves locking around the entire read-side or update-side critical sections. This is illustrated in the \verb+add_route()+ function shown in Listing \ref{addroutereaderwriterlocklisting}, where a lock is acquired around the entire update-side critical section. Similar locking is used around the read-side critical section in \verb+lookup_route()+ (Listing \ref{lookuproutereaderwriterlocklisting}).
+\begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting,float=tph]
+int RadixIPLookup107::lookup_route(IPAddress addr, 
+                                   IPAddress &gw) const
+{  
+    _lock.acquire_read();
+    ...
+    read side critical section
+    ...
+    _lock.release_read();
+    return port;
+}
+\end{lstlisting}
+\begin{lstlisting}[caption = Reader-writer lock usage in add\_route(), label=addroutereaderwriterlocklisting,float=tph]
+int
+RadixIPLookup107::add_route(const IPRoute &route, 
+                            bool set, 
+                            IPRoute *old_route, 
+                            ErrorHandler *)
+{
+  _lock.acquire_write();
+  ...
+  write-side crtical section
+  ...
+  _lock.release_write();
+  return 0;
+}
+\end{lstlisting}  
 \subsection{Performance Hypothesis}
 \label{sec:perfhypothesis}
 RCU is known to work best for a reader-heavy workload with a small number of updaters. Our claim is that the RCU mechanism for click outlined above has almost zero reader-side overhead. Readers being lock-free and wait-free, we expect RCU performance to be comparable to the original version when there are only readers.\\
@@ -929,8 +929,6 @@ The Click configuration file used for this purpose is shown in Listing \ref{lst:
 \end{figure}
 
 \begin{lstlisting}[float=tph, caption = A Click configuration file for 4 readers, label =lst:readercomparison]
-// 4 readers using the RCU (fine grained locking version)
-// of RadixIPLookup.
 Idle
  -> r :: RadixIPLookup106(
                 1.1.1.0/32  8.1.1.1 0,
