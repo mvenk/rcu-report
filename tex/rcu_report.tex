@@ -713,10 +713,19 @@ RCU allows readers to proceed concurrently with an updater. The updater can \tex
 The subsequent sections explain how we locate quiescent states and grace periods in Click.
 \subsubsection{RCU Using Timers}
 \label{sec:rcutimers}
-IP lookups are read-side critical sections; they read the routing table which is a shared data structure. IP lookups using RadixIPLookup will finish within $1000 ns$ on modern commodity machines \cite{lookuptime}. A fixed time interval $\ge 1000 ns$ can be a grace period to free stale data-structures. A $1000ns$ interval is will cause very frequent reclamations. A slightly wider interval of $500ms$ is chosen. 
+IP lookups are read-side critical sections. An IP lookup reads the routing table which is a shared data structure. IP lookups using RadixIPLookup finish within $1000 ns$ on modern commodity machines \cite{lookuptime}. A fixed time interval $\ge 1000 ns$ can be a grace period to free stale data-structures. An interval of $1000 ns$ leads to very frequent reclamations. A very wide time interval can lead to a infrequent reclamations and a large memory footprint. So a convenient interval of $500ms$ is chosen.\\ 
 
-Click provides a Timer class which runs call-back functions at specified time-intervals. We use this to schedule a callback which reclaims freed data at a time interval of $500 ms$.
+Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our implementation involved using the Click Timer class to schedule reclamations. Click provides a Timer class which runs call-back functions at specified time-intervals. We use this to schedule a callback which reclaims freed data at a time interval of $500 ms$.
+\begin{figure}[float=tph]
+\begin{center}
+\includegraphics[scale=0.28]{../images/diagrams/rcutimer}
+\caption{ Three threads run concurrently. In the first 500 ms interval, an updater changes a shared data structure. Readers which have started before the update completes recieve the older value of \emph{x}. Readers which begin after the updater completes recieve the newer value. In each interval, stale data from the intervals prior to the previous interval can be reclaimed. It is safe to reclaim \emph{x} during or after the third interval and safe to reclaim \emph{y} during or after the fourth interval.
+}
+\label{fig:rcutimer}
+\end{center}
+\end{figure}
 
+\subsubsection{RCU using the Click Scheduling Loop}
 \paragraph{Grace Periods and Reclamation}
 We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}.
 
@@ -780,9 +789,9 @@ One of the main challenges in implementing RCU for Click was identifying quiesce
 \end{enumerate}
 
 
-\subsection{RCU using Click Scheduling Loop}
+\subsubsection{RCU using Click Scheduling Loop}
 \label{rcuschedloop}
-The timer expiry as a quiescent state described in Subsection \ref{sec:rcutimers} works well for RadixIPLookup since each lookup is almost guaranteed to finish within 500 ms. This is not true of other elements in Click and it may not be possible to determine if and when a reader terminates. We wish to detect quiescent states for all other userlevel elements without having to know how long it takes for a reader task to complete. One approach is to use the scheduling loop in Click to detect quiescent states.
+The timer expiry as a quiescent state described in Section \ref{sec:rcutimers} works well for RadixIPLookup since each lookup completes within a fixed time interval. For other elements in Click, it may not be possible to determine the duration of a read-side critical section. We wish to detect quiescent states for all other userlevel elements without having to know how long it takes for a reader task to complete. One approach is to use the scheduling loop in Click to detect quiescent states.
 \paragraph{The Click RouterThread driver loop}
 Click allows the user to supply the maximum number of threads it can use. Click has a class called \emph{RouterThread} which is responsible for running tasks scheduled by other Click elements. When Click is allowed to run with say $N$ threads, $N$ instances of \emph{RouterThread} are created. Each \emph{RouterThread} instance runs a \verb+driver()+ function which runs tasks scheduled by Click elements in a loop. We will refer to this loop as the ``driver loop''. After running tasks, control periodically returns to the driver loop. A highly abridged version of the driver loop is shown in listing \ref{lst:driverloop}.
 \begin{lstlisting}[caption = Pseudocode for the driver loop, label=lst:driverloop]
