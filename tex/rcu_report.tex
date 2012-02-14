@@ -70,7 +70,7 @@ Building a scalable and safe multi-core application is not a trivial task. Share
 
 We wish to design a highly efficient multi-core solution for IP lookups in a software router. This workload is typically read intensive - comprising of 90\% readers and less than 10\% updaters. \emph{Read Copy Update} (RCU)\cite{readcopyupdate} scales efficiently on read intensive workloads. This is because RCU has very low read side overhead allowing concurrent readers to execute in the presence of a writer without any synchronization. Concurrent writers generally require some form of synchronization. ``RCU permits both readers and writers to make forward concurrent progress''\cite{urcu}. For these reasons, we implemented a Read Copy Update framework for the Click modular router. We compare the performance of our approach against a traditional reader-writer lock and show that RCU does up to 90\% better.\\
 
-The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click elements we are concerned with. Section \ref{sec:problem} describes why implementing a multicore solution was challenging. Section \ref{sec:solution} describes our solutions to the problem along with the implementation details. Sections \ref{sec:perfhypothesis} and \ref{sec:perfeval} describe the performance hypotheses and analysis.
+The rest of the document is organized as follows. Section \ref{sec:background} gives the reader a background on the userlevel Click Elements we are concerned with. Section \ref{sec:problem} describes why implementing a multicore solution was challenging. Section \ref{sec:solution} describes our solutions to the problem along with the implementation details. Sections \ref{sec:perfhypothesis} and \ref{sec:perfeval} describe the performance hypotheses and analysis.
 \section{Related Work}
 With over 2000 reported uses of the RCU API \cite{rcuusage} in the Linux kernel in recent years, RCU is widely used in system software. It does not seem to be as popular in userlevel applications. Desnoyers et al. \cite{urcu} attribute this to multiple factors such as the constrained design imposed by previous userlevel RCU algorithms, heavy read-side overhead etc. They propose and discuss several approaches to implementing RCU in applications. One such approach is the quiescent state based reclaimation (QSBR)  approach. It has near zero read side overhead but has constraints on application design: it requires that each thread call \verb+rcu_quiescent_state()+ periodically when the thread lies in a quiescent state. Another approach is what is referred to as \emph{General Purpose RCU}. In contrast with QSBR, this approach does not impose any constraints on application design; it can even be used in implementing library functions and API. It has the highest read-side overhead as compared to the other RCU approaches. The overhead is due to memory barriers which are inserted before and after the read side critical sections. The third approach is the \emph{Signal-Based RCU approach}. It avoids the high read-side overhead in the general-purpose approach by sending POSIX signal from the update side critical sections.
 
@@ -86,9 +86,9 @@ Multiple efforts have been made at exploiting parallelism in the packet-flow mec
 Dobrescu et al. \cite{dobrescu} have proposed a technique in which the packet-processing flow and server characteristics are taken as input to formulate an optimization problem. A compiler would then solve this problem and output machine code which will optimize for throughput.
 \section{Background}
 \label{sec:background}
-This section presents a brief overview of the \emph{RadixIPLookup} element. Our approach involved implementation and analysis using the RadixIPLookup element. We then extended our solution to other elements in Click. 
+This section presents a brief overview of the \emph{RadixIPLookup} Element. Our approach involved implementation and analysis using the RadixIPLookup Element. We then extended our solution to other Elements in Click. 
 \subsection{An overview of RadixIPLookup}
-The \emph{RadixIPLookup} element \cite{radixiplookup} is a class which is used to perform IP lookups. It uses a radix trie to perform the lookups and a vector to store the routes. This structure is explained in further detail. 
+The \emph{RadixIPLookup} Element \cite{radixiplookup} is a class which is used to perform IP lookups. It uses a radix trie to perform the lookups and a vector to store the routes. This structure is explained in further detail. 
 \subsubsection{The Radix Tree}
 The radix tree is structured as a trie. The trie has  $2^8$ nodes at the first level, and $2^4$ nodes in the subsequent 6 levels. A lookup therefore has to traverse a maximum of 7 levels. This structure covers all $2^{32}$ IP addresses when the last level is fully occupied. Figure \ref{radixtree} shows the tree pictorially.\\
 \begin{figure}[tph]
@@ -131,7 +131,7 @@ Routing Table Lookups for the Internet Protocol use a longest prefix match algor
   }
 \end{lstlisting}
 \subsubsection{The Vector class}
-The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. Address is the IP adress of the route. Mask is the subnet mask for that route. Gateway is the destination to which a packet matching an address/mask will be routed to through the port. Extra is used to recycle previously used but currently unused space within the vector. It is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is currently in use extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a freelist. Table \ref{tbl:vector} represents a sample vector.
+The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup Element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. Address is the IP adress of the route. Mask is the subnet mask for that route. Gateway is the destination to which a packet matching an address/mask will be routed to through the port. Extra is used to recycle previously used but currently unused space within the vector. It is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is currently in use extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a freelist. Table \ref{tbl:vector} represents a sample vector.
 
 \begin{table}[float=tph]
 \begin{center}
@@ -176,7 +176,7 @@ The vector is initialized to hold a specific number of entries (\verb+_capacity+
 
 \section{The Problem}
 \label{sec:problem}
-Our goal is to improve lookup performance by allowing for multithread access to Click elements. In this section we look at existing problems which hinder safe multithreaded access.\\
+Our goal is to improve lookup performance by allowing for multithread access to Click Elements. In this section we look at existing problems which hinder safe multithreaded access.\\
 
 This section is divided into Updater-Updater Conflicts and Reader-Updater Conflicts. The Updater-Updater conflicts section describes how multiple updaters can cause race conditions which corrupt the state of shared data structures. The Reader-Updater Conflicts section describes how a reader racing with an updater might read stale or invalid data.
 \subsection{Updater-Updater Conflicts}
@@ -458,7 +458,7 @@ The node is added to the radix tree.\\
   }
 \end{lstlisting}
 \paragraph{Verifying conflicts in Click}
-An approach similar to the one described in the Reader-Updater Conflicts section was followed here. We created a Click elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete the same route having the same address but different values of the port. Both BashRadixIPLookup and PoundRadixIPLookup run concurrently on the same instance of RadixIPLookup. This concurrency is ensured by using the \emph{StaticThreadSched()} element in the script.
+An approach similar to the one described in the Reader-Updater Conflicts section was followed here. We created a Click Elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete the same route having the same address but different values of the port. Both BashRadixIPLookup and PoundRadixIPLookup run concurrently on the same instance of RadixIPLookup. This concurrency is ensured by using the \emph{StaticThreadSched()} Element in the script.
 \begin{code}
   BashRadixIPLookup::repeat 10,000 times {
     add_route (A,X);
@@ -471,7 +471,7 @@ An approach similar to the one described in the Reader-Updater Conflicts section
 \end{code}
 The tests resulted in segmentation faults and assertion failures, which did not occur if locks were acquired during updates.
 \subsection{Reader-Updater Conflicts}
-The conflicts in the RadixIPLookup element occur primarily in two data structures: vector used to store the routes, and the radix-tree which stores a key indexing into the vector. The sections below describe the conflicts which occur in each of these data structures.
+The conflicts in the RadixIPLookup Element occur primarily in two data structures: vector used to store the routes, and the radix-tree which stores a key indexing into the vector. The sections below describe the conflicts which occur in each of these data structures.
 \paragraph{Radix Tree:}
 This section describes some of the reader-updater conflicts which exist and why they are not a source for concern. We take a look at a race which might arise and explain why it is not a serious problem.\\
 
@@ -532,7 +532,7 @@ The library files in Click include a generic dynamically resized Vector class. T
 We can observe at least two inadmissible conflicts which can be caused by race conditions. Firstly, if two updaters and a reader run concurrently, the reader might get an index into an entry which has been freed and reused. The reader may end up receiving a route which is incorrect for the IP address in question. Secondly, a reader might access invalid memory in the presence of a concurrent updater. One must recall that the \verb+push_back()+ operation dynamically resizes the vector if necessary. If an updater initiates a dynamic resize operation amidst a concurrent reader, the reader might access invalid memory.
 
 \paragraph{Verifying conflicts in Click}
-The first conflict mentioned above was verified by running Click scripts. New elements were created and run in multi-threaded mode.The \emph{StaticThreadSched()} element was used to specify the thread on which the element must be run. Listing \ref{scriptlisting} facilitates a clearer picture of the use of \emph{StaticThreadSched()} for this case.
+The first conflict mentioned above was verified by running Click scripts. New Elements were created and run in multi-threaded mode.The \emph{StaticThreadSched()} Element was used to specify the thread on which the Element must be run. Listing \ref{scriptlisting} facilitates a clearer picture of the use of \emph{StaticThreadSched()} for this case.
 \begin{lstlisting}[caption = Click script for verifying reader-updater conflicts, label=scriptlisting]
 Idle
  -> r :: RadixIPLookup106(
@@ -551,7 +551,7 @@ StaticThreadSched(
 
 DriverManager(stop);
 \end{lstlisting}
-We created a Click elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete a route having the for the same IP address but different port values.
+We created a Click Elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete a route having the for the same IP address but different port values.
 \begin{code}
   BashRadixIPLookup::repeat 10,000 times {
     add_route (A,X);
@@ -581,14 +581,11 @@ A thread-safe implementation will have us expect that we always get X or the def
 \label{sec:solution}
 The race conditions described in the previous sections occur due to threads accessing shared data structures. RCU is known to be an efficient synchronization technique for read-heavy workloads. We compare the performance of RCU with a reader-writer lock. The reader-writer lock approach is also described in this section.
 
-\subsection{Read Copy Update}
+\subsection{Read-Copy Update}
 
 \label{sec:rcu}
-Coarse and fine-grained locking solve the problems we have identified, but the locking system is still over 14 times slower in a pure reader workload (See Table \ref{tbl:macro_vr_0w} for details). Our goal is to develop a solution with very low read side overhead, so we turn to Read-Copy-Update.\\
 
-Quiescent State Based Reclamation (QSBR) is an approach with optimal performance at the cost of a more constrained application design\cite{hart}. Using QSBR requires that we identify \emph{grace periods}. A grace period is a state in which each thread has undergone at least one \emph{quiescent state}. A quiescent state is a state where a thread does not have any references to mutable data structures. This could be an idle-loop or a state where the thread is running code which does not access any shared data.\\
-
-RCU allows readers to proceed concurrently with an updater. The updater can \textbf{remove} shared data structures, but is not allowed to \textbf{delete} it. Multiple copies of shared data structures are maintained. The old copies are deleted when they are no longer being used. A grace period for a certain copy of a shared data structure is a period where we can safely delete it. Figure \ref{fig:rcuexp1} illustrates this concept.
+RCU allows readers to proceed concurrently with an updater. The updater can \textbf{remove} shared data structures, but is not allowed to \textbf{delete} it. Multiple copies of shared data structures are maintained. The old copies are deleted when they are no longer being used. A thread reaches a quiescent state when it releases references to shared data structures. A grace period is reached when all threads have undergone at least one quiescent state. It is safe to delete stale copies (reclaim memory) during a grace period . Figure \ref{fig:rcuexp1} illustrates this concept. We then explain how we locate quiescent states and grace periods in Click.
 
 \begin{figure}[float=tph]
 \begin{center}
@@ -598,12 +595,11 @@ RCU allows readers to proceed concurrently with an updater. The updater can \tex
 \end{center}
 \end{figure}
 
-The subsequent sections explain how we locate quiescent states and grace periods in Click.
 \subsubsection{RCU Using Timers}
 \label{sec:rcutimers}
-IP lookups are read-side critical sections. An IP lookup reads the routing table which is a shared data structure. IP lookups using RadixIPLookup finish within $1000 ns$ on modern commodity machines \cite{lookuptime}. A fixed time interval $\ge 1000 ns$ can be a grace period to free stale data-structures. An interval of $1000 ns$ leads to very frequent reclamations. A very wide time interval can lead to a infrequent reclamations and a large memory footprint. So a convenient interval of $500ms$ is chosen.\\ 
+IP lookups are read-side critical sections. An IP lookup reads the routing table which is a shared data structure. IP lookups using RadixIPLookup finish within $1000$ ns on modern commodity machines \cite{lookuptime}. A fixed time interval $\ge 1000$ ns can be a grace period to free stale data-structures. An interval of $1000$ ns leads to very frequent reclamations. A very wide time interval can lead to infrequent reclamations and a larger memory footprint. So a convenient interval of $500$ ms is chosen.\\ 
 
-Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our implementation involved using the Click Timer class to schedule reclamations. Click provides a Timer class which runs call-back functions at specified time-intervals. We use this to schedule a callback which reclaims freed data at a time interval of $500 ms$.
+Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our implementation involved using the Click Timer class to schedule reclamations. Click provides a Timer class which calls functions at specified time-intervals. We use this to schedule a callback which reclaims freed data at a time interval of $500$ ms.
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.28]{../images/diagrams/rcutimer}
@@ -613,13 +609,13 @@ Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our imple
 \end{center}
 \end{figure}
 
-\subsubsection{RCU using the Click Scheduling Loop}
+\subsubsection{RCU Using The Click Scheduling Loop}
 \label{rcuschedloop}
 
-The timer expiry as a quiescent state described in Section \ref{sec:rcutimers} works well for RadixIPLookup since each lookup completes within a fixed time interval. For other elements in Click, it may not be possible to determine the duration of a read-side critical section. We wish to detect quiescent states for all other userlevel elements without having to know how long it takes for a reader task to complete. The scheme described here does not require that the reader task be of a specific duration. It does require that the reader task eventually terminate. The approach involves using the scheduling loop in Click to detect quiescent states. 
+The timer expiry as a quiescent state described in Section \ref{sec:rcutimers} works well for RadixIPLookup since each lookup completes within a fixed time interval. For other Elements in Click, it may not be possible to determine the duration of a read-side critical section. We wish to detect quiescent states for all other userlevel Elements without having to know how long it takes for a reader task to complete. The scheme described here does not require that the reader task be of a specific duration. It does require that the reader task eventually terminate. The approach involves using the scheduling loop in Click to detect quiescent states. 
 
-\paragraph{The Click RouterThread driver loop}
-A \emph{task} in Click is something that requires CPU time or packet processing time. A task can involve performing an IP lookup, encapsulating a packet etc. Click has a class called \emph{RouterThread} which is responsible for running tasks. When Click is allowed to run with say $N$ threads, $N$ instances of \emph{RouterThread} are created. Each \emph{RouterThread} instance runs a \verb+driver()+ function which runs tasks scheduled by Click elements in a loop. We will refer to this loop as the ``driver loop''. After running a specified number of tasks, control returns to the driver loop. A highly abridged version of the driver loop is shown in Algorithm \ref{alg:driverloop}.
+\paragraph{The Click RouterThread Driver Loop}
+A \emph{task} in Click is something that requires CPU time or packet processing time. A task can involve performing an IP lookup, encapsulating a packet etc. Click has a class called \emph{RouterThread} which is responsible for running tasks. When Click is allowed to run with say $N$ threads, $N$ instances of \emph{RouterThread} are created. Each \emph{RouterThread} instance runs a \verb+driver()+ function which runs tasks scheduled by Click Elements in a loop. We will refer to this loop as the ``driver loop''. After running a specified number of tasks, control returns to the driver loop. A highly abridged version of the driver loop is shown in Algorithm \ref{alg:driverloop}.
 
 
 \begin{algorithm}[float=tph]
@@ -636,7 +632,7 @@ A \emph{task} in Click is something that requires CPU time or packet processing 
 \end{algorithm}
 
 \paragraph{Grace Periods and Reclamation}
-We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}. Each RouterThread instance maintains a local epoch counter. The local epoch counter can either be zero or one. The application has a global epoch counter. The global epoch counter is not physically stored; we only use it to explain and justify our approach. Initially all local epoch counters are set to one. After a thread completes a task, it resets its local epoch number. When the local epoch counters of all threads are reset, we reach a grace period. (All threads have released references to shared data structures they once held.) At this point, we reclaim stale data structures from the penultimate global epoch, increment the global epoch counter, set all local epoch counters and continue.
+We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}. Each \emph{RouterThread} instance maintains a local epoch counter. The local epoch counter can either be zero or one. The application has a global epoch counter. The global epoch counter is not physically stored; we only use it to explain and justify our approach. Initially all local epoch counters are set to one. After a thread completes a task, it resets its local epoch number. When the local epoch counters of all threads are reset, we reach a grace period. (All threads have released references to shared data structures they once held.) At this point, we reclaim stale data structures from the penultimate global epoch, increment the global epoch counter, set all local epoch counters and continue.
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.36]{../images/diagrams/rcuexp2}
@@ -668,7 +664,7 @@ It is only safe to free \emph{x}  \textbf{after} \emph{global epoch 1} has passe
 \label{alg:rcu}
 \end{algorithmic}
 \end{algorithm}
-The transition between \emph{global epoch 1} and \emph{global epoch 2} in Figure \ref{fig:rcuexp2} is a grace period for updaters which finish in \emph{global epoch 1}. This is because any readers which start in \emph{global epoch 0} have finished by the end of \emph{global epoch 1}. It is safe to reclaim memory in \emph{global epoch 2}. We can extend this observation using Figure \ref{alg:rcu} and say that stale data accumulated in \emph{epoch N} can be reclaimed \textbf{during} \emph{global epoch N+2}. Note that we cannot do this \textbf{during} \emph{global epoch N+1} since a reader which starts in \emph{global epoch N} might not finish until the end of \emph{global epoch N+1}.\\
+The transition between \emph{global epoch 1} and \emph{global epoch 2} in Figure \ref{fig:rcuexp2} is a grace period for updaters which finish in \emph{global epoch 1}. This is because any readers which start in \emph{global epoch 0} have finished by the end of \emph{global epoch 1}. It is safe to reclaim memory in \emph{global epoch 2}. We can extend this observation using Figure \ref{alg:rcu} and say that stale data accumulated in \emph{global epoch N} can be reclaimed \textbf{during} \emph{global epoch N+2}. Note that we cannot do this \textbf{during} \emph{global epoch N+1} since a reader which starts in \emph{global epoch N} might not finish until the end of \emph{global epoch N+1}.\\
 
 In order to facilitate reclamation of stale data of \emph{global epoch N-2} in \emph{global epoch N}, we maintain two lists: a \emph{reclaim\_now} list and a \emph{reclaim\_later} list. When an updater modifies a shared data structure, we maintain the older copy. The older copy is also added to the \emph{reclaim\_later} list. Whenever a grace period is reached:
 \begin{enumerate}
@@ -691,7 +687,7 @@ For our scheme, we can provide the two RCU guarantees expressed in \cite{urcu}. 
 \end{algorithmic}
 
 \item \emph{Publication Guarantee:} 
-Although readers proceed concurrently with writers, readers must see either the old version of the data or the newer version. Readers should not see an inconsistent state of the data structure. Readers which begin after an updater has completed should see the newer version. In order to ensure that readers do not see an inconsistent version for RadixIPLookup, we use the bucketvector described in Section \ref{sec:finegrainedlocking}. Variables which reflect the state of the vector such as \verb+_capacity+ and \verb+_n+ are updated only after the pointers are updated. Memory barriers are also used to ensure that these variables reflect their newer values only after memory has been allocated.\\
+Although readers proceed concurrently with writers, readers must see either the old version of the data or the newer version. Readers should not see an inconsistent state of the data structure. Readers which begin after an updater has completed should see the newer version. In order to ensure that readers do not see an inconsistent version for RadixIPLookup, variables which reflect the state of the vector such as \verb+_capacity+ and \verb+_n+ are updated only after the pointers are updated. Memory barriers are also used to ensure that these variables reflect their newer values only after memory has been allocated.\\
 \end{enumerate}
 
 
@@ -1021,11 +1017,11 @@ today is a feasible way to improve performance. This document has outlined an ef
 
 The primary challenges in implementing RCU for Click were to
 identify quiescent states in a way which could be applied to all
-elements. 
+Elements. 
 
 We have built an RCU framework for userlevel Click invlolving a
 mechanism to detect quiescent states and an API which can be used by
-a userlevel element in Click.
+a userlevel Element in Click.
 
 We have verified through our benchmarks that
 this mechanism does indeed have a very low reader side overhead. The RCU approach is also up to 70\% better than a reader-writer lock on read intensive workloads.
@@ -1036,7 +1032,7 @@ this mechanism does indeed have a very low reader side overhead. The RCU approac
 %\item Implement RCU for RadixIPLookup if Radix nodes are deleted when a route is removed.
 %\item Implement RCU for the Radix Tree: Currently, RCU has been only used on the vector. A coarse grained lock is acquired around updates to the Radix Tree.
 %\end{enumerate}
-We have experimented with the RadixIPLookup element in Click. However, it would be useful to implement a RCU based synchronization for other elements such as DirectIPLookup or RangeIPLookup.\\ 
+We have experimented with the RadixIPLookup Element in Click. However, it would be useful to implement a RCU based synchronization for other Elements such as DirectIPLookup or RangeIPLookup.\\ 
 
 Our approach uses RCU for the vector in RadixIPLookup, however a coarse grained lock is acquired for updates to the radix tree. The size of the radix tree depends on the size of the routing table, which is typically very large. Thus implementing RCU based synchronization for the radix tree would be very useful.
 \section{Acknowledgements}
