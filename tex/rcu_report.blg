@@ -3,45 +3,45 @@ The top-level auxiliary file: rcu_report.aux
 The style file: plain.bst
 Database file #1: rcu_report.bib
 Warning--to sort, need author or key in routeviews
-You've used 11 entries,
+You've used 13 entries,
             2118 wiz_defined-function locations,
-            566 strings with 6187 characters,
-and the built_in function-call counts, 4165 in all, are:
-= -- 413
-> -- 219
-< -- 3
-+ -- 90
-- -- 76
-* -- 301
-:= -- 680
-add.period$ -- 35
-call.type$ -- 11
-change.case$ -- 71
+            576 strings with 6859 characters,
+and the built_in function-call counts, 5089 in all, are:
+= -- 493
+> -- 290
+< -- 4
++ -- 117
+- -- 101
+* -- 369
+:= -- 835
+add.period$ -- 42
+call.type$ -- 13
+change.case$ -- 88
 chr.to.int$ -- 0
-cite$ -- 12
-duplicate$ -- 141
-empty$ -- 309
-format.name$ -- 76
-if$ -- 878
+cite$ -- 14
+duplicate$ -- 169
+empty$ -- 370
+format.name$ -- 101
+if$ -- 1073
 int.to.chr$ -- 0
-int.to.str$ -- 11
-missing$ -- 8
-newline$ -- 57
-num.names$ -- 20
-pop$ -- 74
+int.to.str$ -- 13
+missing$ -- 9
+newline$ -- 67
+num.names$ -- 26
+pop$ -- 97
 preamble$ -- 1
-purify$ -- 60
+purify$ -- 75
 quote$ -- 0
-skip$ -- 111
+skip$ -- 135
 stack$ -- 0
-substring$ -- 252
-swap$ -- 34
-text.length$ -- 3
+substring$ -- 282
+swap$ -- 44
+text.length$ -- 4
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 44
+type$ -- 52
 warning$ -- 1
-while$ -- 37
-width$ -- 13
-write$ -- 124
+while$ -- 44
+width$ -- 15
+write$ -- 145
 (There was 1 warning)

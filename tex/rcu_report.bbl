@@ -4,6 +4,24 @@
 The routeviews project.
 \newblock \url{http://archive.routeviews.org/}.
 
+\bibitem{cansoftwareroutersscale}
+Katerina~J. Argyraki, Salman Baset, Byung-Gon Chun, Kevin~R. Fall, Gianluca
+  Iannaccone, Allan Knies, Eddie Kohler, Maziar Manesh, Sergiu Nedevschi, and
+  Sylvia Ratnasamy.
+\newblock Can software routers scale?
+\newblock In Jennifer Rexford, Jacobus~E. van~der Merwe, and T.~V. Lakshman,
+  editors, {\em Proceedings of the ACM SIGCOMM 2008 Workshop on Programmable
+  Routers for Extensible Services of Tomorrow, PRESTO 2008, Seattle, WA, USA,
+  August 22, 2008}, pages 21--26. ACM, 2008.
+
+\bibitem{attlinkrate}
+AT$\&$T".
+\newblock At$\&$t completes next-generation ip/mpls backbone network, world's
+  largest deployment of 40-gigabit connectivity.
+\newblock
+  \url{http://www.att.com/gen/press-room?cdvn=news&newsarticleid=26230&pid=480%
+0}.
+
 \bibitem{urcu}
 Mathieu Desnoyers, Paul~E. McKenney, Alan Stern, Michel~R. Dagenais, and
   Jonathan Walpole.
