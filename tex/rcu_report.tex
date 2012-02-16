@@ -585,7 +585,7 @@ The race conditions described in the previous sections occur due to threads acce
 
 \label{sec:rcu}
 
-RCU allows readers to proceed concurrently with an updater. The updater can \textbf{remove} shared data structures, but is not allowed to \textbf{delete} it. Multiple copies of shared data structures are maintained. The old copies are deleted when they are no longer being used. A thread reaches a quiescent state when it releases references to shared data structures. A grace period is reached when all threads have undergone at least one quiescent state. It is safe to delete stale copies (reclaim memory) during a grace period . Figure \ref{fig:rcuexp1} illustrates this concept. We then explain how we locate quiescent states and grace periods in Click.
+RCU allows readers to proceed concurrently with an updater. The updater can \textbf{remove} shared data structures, but is not allowed to \textbf{delete} it. Multiple copies of shared data structures are maintained. The old copies are deleted when they are no longer being used. A thread reaches a quiescent state when it releases references to shared data structures. A grace period is reached when all threads have undergone at least one quiescent state. It is safe to delete stale copies (reclaim memory) during a grace period. Figure \ref{fig:rcuexp1} illustrates this concept.
 
 \begin{figure}[float=tph]
 \begin{center}
@@ -603,7 +603,7 @@ Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our imple
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.28]{../images/diagrams/rcutimer}
-\caption{ Three threads run concurrently. In the first 500 ms interval, an updater changes a shared data structure. Readers which have started before the update completes recieve the older value of \emph{x}. Readers which begin after the updater completes recieve the newer value. In each interval, stale data from the intervals prior to the previous interval can be reclaimed. It is safe to reclaim \emph{x} during or after the third interval and safe to reclaim \emph{y} during or after the fourth interval.
+\caption{ Three threads run concurrently. In the first 500 ms interval, an updater changes a shared data structure. Readers which have started before the update completes recieve the older value of \emph{x}. Readers which begin after the updater completes recieve the newer value. In each interval, stale data from the intervals prior to the previous interval can be reclaimed. It is safe to reclaim \emph{x} during or after the third interval and safe to reclaim \emph{z} during or after the fourth interval. Reclamations are highlighted in gray.
 }
 \label{fig:rcutimer}
 \end{center}
@@ -632,7 +632,7 @@ A \emph{task} in Click is something that requires CPU time or packet processing 
 \end{algorithm}
 
 \paragraph{Grace Periods and Reclamation}
-We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}. Each \emph{RouterThread} instance maintains a local epoch counter. The local epoch counter can either be zero or one. The application has a global epoch counter. The global epoch counter is not physically stored; we only use it to explain and justify our approach. Initially all local epoch counters are set to one. After a thread completes a task, it resets its local epoch number. When the local epoch counters of all threads are reset, we reach a grace period. (All threads have released references to shared data structures they once held.) At this point, we reclaim stale data structures from the penultimate global epoch, increment the global epoch counter, set all local epoch counters and continue.
+We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}. Each \emph{RouterThread} instance maintains a local epoch counter, $le$. The local epoch counter can either be zero or one. The application has a global epoch counter, $GE$. The global epoch counter is not physically stored; we only use it to explain and justify our approach. Initially all local epoch counters are set to one. After a thread completes a task, it resets its local epoch number. When the local epoch counters of all threads are reset, we reach a grace period. (All threads have released references to shared data structures they once held.) At this point, we reclaim stale data structures from the penultimate global epoch, increment the global epoch counter, set all local epoch counters and continue.
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.36]{../images/diagrams/rcuexp2}
