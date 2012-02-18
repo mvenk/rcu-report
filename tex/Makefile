@@ -59,6 +59,6 @@ edit:
 editbib:
 	emacs rcu_report.bib &
 clean:
-	rm *.aux *.log *.pdf
+	rm *.aux *.log *.pdf *.bbl *.blg
 	rm micro_*.tex
 	rm macro_*.tex

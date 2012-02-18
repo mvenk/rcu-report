@@ -22,6 +22,19 @@ AT$\&$T".
   \url{http://www.att.com/gen/press-room?cdvn=news&newsarticleid=26230&pid=480%
 0}.
 
+\bibitem{chenmorris}
+Benjie Chen and Robert Morris.
+\newblock Flexible control of parallelism in a multiprocessor pc router, 2001.
+
+\bibitem{fastrtable3}
+Tzi cker Chiueh and Prashant Pradhan.
+\newblock High-performance ip routing table lookup using cpu caching.
+
+\bibitem{incrtablesize}
+L.~Zhang D.~Meyer and K.~Fall.
+\newblock Report from the iab workshop onrouting and addressing. rfc 4984,
+  2007.
+
 \bibitem{urcu}
 Mathieu Desnoyers, Paul~E. McKenney, Alan Stern, Michel~R. Dagenais, and
   Jonathan Walpole.
@@ -50,10 +63,22 @@ Dinakar Guniguntala, Paul~E. Mckenney, Josh Triplett, and Jonathan Walpole.
   on shared-memory multiprocessor systems with linux.
 \newblock {\em IBM Systems Journal}, 47(2):221--236, 2008.
 
+\bibitem{fastrtable1}
+Pankaj Gupta, Steven Lin, and Nick Mckeown.
+\newblock Routing lookups in hardware at memory access speeds.
+\newblock pages 1240--1247, 1998.
+
 \bibitem{hart}
 Thomas~E. Hart, Paul~E. McKenney, Angela~Demke Brown, and Jonathan Walpole.
 \newblock Performance of memory reclamation for lockless synchronization.
 \newblock {\em J. Parallel Distrib. Comput.}, 67:1270--1285, December 2007.
+
+\bibitem{fastrtable2}
+Zhuo Huang, David Lin, Jih-Kwon Peir, Shigang Chen, and S.~M.~Iftekharul Alam.
+\newblock Fast routing table lookup based on deterministic multi-hashing.
+\newblock In {\em Proceedings of the The 18th IEEE International Conference on
+  Network Protocols}, ICNP '10, pages 31--40, Washington, DC, USA, 2010. IEEE
+  Computer Society.
 
 \bibitem{lookuptime}
 Eddie Kohler.

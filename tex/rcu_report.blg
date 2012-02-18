@@ -3,45 +3,46 @@ The top-level auxiliary file: rcu_report.aux
 The style file: plain.bst
 Database file #1: rcu_report.bib
 Warning--to sort, need author or key in routeviews
-You've used 13 entries,
+Warning--empty booktitle in fastrtable1
+You've used 18 entries,
             2118 wiz_defined-function locations,
-            576 strings with 6859 characters,
-and the built_in function-call counts, 5089 in all, are:
-= -- 493
-> -- 290
-< -- 4
-+ -- 117
-- -- 101
-* -- 369
-:= -- 835
-add.period$ -- 42
-call.type$ -- 13
-change.case$ -- 88
+            598 strings with 7568 characters,
+and the built_in function-call counts, 6819 in all, are:
+= -- 660
+> -- 375
+< -- 6
++ -- 150
+- -- 129
+* -- 466
+:= -- 1098
+add.period$ -- 55
+call.type$ -- 18
+change.case$ -- 117
 chr.to.int$ -- 0
-cite$ -- 14
-duplicate$ -- 169
-empty$ -- 370
-format.name$ -- 101
-if$ -- 1073
+cite$ -- 20
+duplicate$ -- 235
+empty$ -- 514
+format.name$ -- 129
+if$ -- 1456
 int.to.chr$ -- 0
-int.to.str$ -- 13
-missing$ -- 9
-newline$ -- 67
-num.names$ -- 26
-pop$ -- 97
+int.to.str$ -- 18
+missing$ -- 11
+newline$ -- 89
+num.names$ -- 36
+pop$ -- 144
 preamble$ -- 1
-purify$ -- 75
+purify$ -- 99
 quote$ -- 0
-skip$ -- 135
+skip$ -- 203
 stack$ -- 0
-substring$ -- 282
-swap$ -- 44
-text.length$ -- 4
+substring$ -- 371
+swap$ -- 67
+text.length$ -- 6
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 52
-warning$ -- 1
-while$ -- 44
-width$ -- 15
-write$ -- 145
-(There was 1 warning)
+type$ -- 72
+warning$ -- 2
+while$ -- 60
+width$ -- 20
+write$ -- 192
+(There were 2 warnings)
