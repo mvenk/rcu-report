@@ -92,10 +92,10 @@ Dobrescu et al. \cite{dobrescu} have proposed a technique in which the packet-pr
 \section{Background}
 \label{sec:background}
 This section presents a brief overview of the \emph{RadixIPLookup} Element. Our approach involved implementation and analysis using the RadixIPLookup Element. We then extended our solution to other Elements in Click. 
-\subsection{An overview of RadixIPLookup}
-The \emph{RadixIPLookup} Element \cite{radixiplookup} is a class which is used to perform IP lookups. It uses a radix trie to perform the lookups and a vector to store the routes. This structure is explained in further detail. 
+\subsection{An Overview of RadixIPLookup}
+The \emph{RadixIPLookup} Element \cite{radixiplookup} is a class which is used to perform IPv4 route lookups. The routing table involves a radix trie to perform route lookups and a vector to store the route information such as the port and gateway. This structure is explained in further detail. 
 \subsubsection{The Radix Tree}
-The radix tree is structured as a trie. The trie has  $2^8$ nodes at the first level, and $2^4$ nodes in the subsequent 6 levels. A lookup therefore has to traverse a maximum of 7 levels. This structure covers all $2^{32}$ IP addresses when the last level is fully occupied. Figure \ref{radixtree} shows the tree pictorially.\\
+The radix tree is structured as a trie. The trie has  $2^8$ nodes at the first level, and $2^4$ nodes in the subsequent 6 levels. A lookup therefore has to traverse a maximum of 7 levels. This structure covers all $2^{32}$ IP addresses ($2^8\times(2^4)^6=2^{32}$) when the last level is fully occupied. Figure \ref{radixtree} shows the tree pictorially.\\
 \begin{figure}[tph]
 \begin{center}
 \includegraphics[scale = 0.23]{../images/diagrams/radixtree2.eps}
@@ -103,11 +103,10 @@ The radix tree is structured as a trie. The trie has  $2^8$ nodes at the first l
 \label{radixtree}
 \end{center}
 \end{figure}
-\\Each level consists of radix nodes. The structure of the radix node is shown in Listing \ref{radixnode}. \verb+_n+ represents the number of radix nodes at that level. \verb+_bitshift+ represents the number of bits to be shifted at that level for prefix matching. For the radix node at level 0 \verb+_n+ is 256 and \verb+_bitshift+ is 24 (which is $32 - 8$). This means that the first 8 bits of the address are matched. For the radix nodes at level $1$, \verb+_n+ is 16 and \verb+_bitshift+ is 20 (which is $32 -8 -4$). This means that at level 1, the first 12 bits of the address have been matched.
+\\Each level consists of radix nodes. The structure of the radix node is shown in Listing \ref{radixnode}. \verb+_n+ represents the node's fanout (the number of keys it contains). \verb+_bitshift+ represents the number of bits to be shifted at that level for prefix matching. For the radix node at level 0, \verb+_n+ is 256 and \verb+_bitshift+ is 24 (which is $32 - 8$). This means that the first 8 bits of the address are matched. For the radix nodes at level $1$, \verb+_n+ is 16 and \verb+_bitshift+ is 20 (which is $32 -8 -4$). This means that at level 1, the first 12 bits of the address have been matched.
 \begin{lstlisting}[float=tph, caption = The Radix Class, label=radixnode]
 class Radix {
   private:
-
     int _bitshift;
     int _n;
     int _nchildren;
@@ -121,7 +120,7 @@ class Radix {
 \end{lstlisting}
 The functions \verb+add_route()+ and \verb+delete_route()+ are used to add and delete routes into the routing table.
 \paragraph{Lookups}
-Routing Table Lookups for the Internet Protocol use a longest prefix match algorithm matching a candidate route with the highest subnet mask. The node at the top most level stores keys which need to match up to an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a $12$ bit long prefix and so on. The last level stores keys which can match up to a $32$ bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP Address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists we repeat the process trying to obtain the longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
+RadixIPLookup uses a longest prefix match algorithm, matching a candidate route with the highest subnet mask. The node at the topmost level stores keys which need to match up to an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a $12$ bit long prefix and so on. The last level stores keys which can match up to a $32$ bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP Address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists we repeat the process trying to obtain the longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
 \begin{lstlisting}[caption = The lookup function, label=lookup]
   static inline int lookup(const Radix *r, int cur, 
                            uint32_t addr) {
