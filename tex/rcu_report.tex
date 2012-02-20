@@ -21,7 +21,7 @@
 basicstyle=\footnotesize\ttfamily,
 showstringspaces=false,
 numbers=left,
-frame=single,
+frame=none,
 numbersep=5pt,
 captionpos=b,
 xleftmargin=17pt,
@@ -120,7 +120,7 @@ class Radix {
 \end{lstlisting}
 The functions \verb+add_route()+ and \verb+delete_route()+ are used to add and delete routes into the routing table.
 \paragraph{Lookups}
-RadixIPLookup uses a longest prefix match algorithm, matching a candidate route with the highest subnet mask. The node at the topmost level stores keys which need to match up to an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a $12$ bit long prefix and so on. The last level stores keys which can match up to a $32$ bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP Address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists we repeat the process trying to obtain the longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
+RadixIPLookup uses a longest prefix match algorithm, matching a candidate route with the highest subnet mask. The node at the topmost level stores keys which need to match up to an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a $12$ bit long prefix, and so on. The last level stores keys which can match up to a $32$ bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists, we repeat the process, trying to obtain the longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
 \begin{lstlisting}[caption = The lookup function, label=lookup]
   static inline int lookup(const Radix *r, int cur, 
                            uint32_t addr) {
@@ -128,14 +128,14 @@ RadixIPLookup uses a longest prefix match algorithm, matching a candidate route 
       int i1 = (addr >> r->_bitshift) & (r->_n - 1);
       const Child &c = r->_children[i1];
       if (c.key)
-      cur = c.key;
+       cur = c.key;
       r = c.child;
     }
     return cur;
   }
 \end{lstlisting}
-\subsubsection{The Vector class}
-The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup Element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. Address is the IP adress of the route. Mask is the subnet mask for that route. Gateway is the destination to which a packet matching an address/mask will be routed to through the port. Extra is used to recycle previously used but currently unused space within the vector. It is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is currently in use extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a freelist. Table \ref{tbl:vector} represents a sample vector.
+\subsubsection{Route Vector for RadixIPLookup}
+The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup Element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. \emph{Address} is the IP address of the route. \emph{Mask} is the subnet mask for that route. \emph{Gateway} is the destination to which a packet matching an address/mask will be routed to through the port. \emph{Extra} is used to recycle previously used but currently unused space within the vector. It is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is currently in use extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a freelist. Table \ref{tbl:vector} represents a sample vector.
 
 \begin{table}[float=tph]
 \begin{center}
@@ -143,9 +143,9 @@ The Click library files provide an implementation of a generic Vector. A brief e
 \hline index & addr & mask & port & gw & extra\\ 
 \hline 0 & 0.0.0.1 & 255.255.255.0 & 1& 22.34.198.3 & 1\\ 
 \hline 1 & 1.1.0.1 & 255.255.255.0 & 1& 1.34.198.3 & 5\\
-\hline 2 & 2.2.2.1 & 255.255.255.0 & 1& 2.34.198.3 & -1\\
-\hline 3 & 1.0.0.1 & 255.255.255.0 & 1& 9.34.198.3 & -1\\
-\hline 4 & 4.0.0.1 & 255.255.255.0 & 1& 8.34.198.3 & -1\\
+\hline 2 & 2.2.2.1 & 255.255.255.0 & 1& 2.34.198.3 & $-1$\\
+\hline 3 & 1.0.0.1 & 255.255.255.0 & 1& 9.34.198.3 & $-1$\\
+\hline 4 & 4.0.0.1 & 255.255.255.0 & 1& 8.34.198.3 & $-1$\\
 \hline 5 & 4.0.0.1 & 255.255.255.0 & 1& 133.34.198.3 & 3\\
 \hline
 \end{tabular}
@@ -173,9 +173,8 @@ The Click library files provide an implementation of a generic Vector. A brief e
 \end{figure}
 
 
-The use of \emph{extra} is illustrated with the help of an example in Figure \ref{fig:freelisteg} for the sample vector shown in Table \ref{tbl:vector}. From the example we can see that reads and deletions are O(1). Insertions are O(1) amortized over the cost of many insertions. This is because the vector is dynamically resized when it is full.\\
+The use of \emph{extra} is illustrated with the help of an example in Figure \ref{fig:freelisteg} for the sample vector shown in Table \ref{tbl:vector}. Reads and deletions are O(1). Insertions are O(1) amortized over the cost of many insertions. This is because the vector is dynamically resized when it is full.\\
 
-\paragraph{Dynamic resize}
 The vector is initialized to hold a specific number of entries (\verb+_capacity+). The number of entries currently in use in the vector is \verb+_n+. The \verb+push_back()+ function adds an entry to the vector. This increments \verb$_n$ by one. If the vector is full (i.e.\verb+_n+ $\ge$ \verb+_capacity+), it is resized to double the value of its previous capacity with a call to \verb+reserve_and_push_back()+.
 
 \section{The Problem}
@@ -189,7 +188,7 @@ We now deal with race-conditions and conflicts arising due to multiple updaters 
 The radix tree suffers from Update-Update conflicts. If multiple updaters try to modify the same region of the tree, there is a race in \verb+change()+ for the assignment of the child pointer. This could cause some of the updates to be lost and also cause a memory leak. The size of the memory leak can be equal to the depth of the tree times the size of a radix node.\\
 
 The race described above is illustrated with the help of Listing \ref{change}.
-\begin{lstlisting} [label =change, caption={A snippet of the change() function where a race can cause a memory leak. This is illustrated in \ref{fig:raceinchange}},float=tph]
+\begin{lstlisting} [label =change, caption={A snippet of the \texttt{change()} function where a race can cause a memory leak. This is illustrated in Figure \ref{fig:raceinchange}}.,float=tph]
   int
   RadixIPLookup::Radix::change(uint32_t addr, uint32_t mask,
                                           int key, bool set)
@@ -215,24 +214,24 @@ Calls \verb$make_radix()$. &  Calls \verb$make_radix()$.\\
 \hline
 \begin{tabular}{p{1.5in}}  
 \raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix1.eps}}\\
-\verb$make_radix()$ returns pointer ptr1 to a newly created radix node.\\
+\texttt{make\_radix()} returns pointer ptr1 to a newly created radix node.\\
 \end{tabular} 
 & 
 \begin{tabular}{p{1.5in}}
   \raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix2.eps}}\\
-  \verb$make_radix()$ returns pointer ptr2  to a newly created radix node.\\
+  \texttt{make\_radix()} returns pointer ptr2  to a newly created radix node.\\
 \end{tabular}\\
 \hline
 \begin{tabular}{p{1.8in}}  
 \raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix1race.eps}}\\\\
- $\_children[i1].child = make\_radix(\_bitshift - 4, 16)$.\\
+ \texttt{\_children[i1].child = make\_radix(\_bitshift - 4, 16)}.\\
 The node is added to the radix tree.\\
 \end{tabular} 
 & 
 \begin{tabular}{p{1.8in}}
   \raisebox{2ex - \height}{\includegraphics[scale=0.4]{../images/diagrams/radix2race.eps}}\\\\
-  $\_children[i1].child = make\_radix(\_bitshift - 4, 16)$.\\
-  The node is added to the tree. We have a memory leak since the older node is now orphaned. \\
+  \texttt{\_children[i1].child = make\_radix(\_bitshift - 4, 16)}.\\
+  The node is added to the tree. We have a memory leak since the older node is now orphaned. Additionally, Thread 1's update is lost. \\
 \end{tabular}\\
 \hline
 \end{tabular}
@@ -241,9 +240,9 @@ The node is added to the radix tree.\\
 \end{center}
 \end{figure}
 
-The \verb+change()+ function in Listing \ref{change} is used to create a radix node for a route with a specific address, and mask. The key passed as a parameter is the index into the vector where the route is stored. Two or more concurrently executing threads create race conditions which can lead to memory leaks. This is explained pictorially in Figure \ref{fig:raceinchange}. Looking at the assignment, we see that if there are multiple threads executing \verb$change()$, there is a race for the assignment of the radix node. Multiple threads may call \verb+make_radix()+, however only one pointer which is returned by \verb+make_radix()+ is assigned. 
+The \verb+change()+ function in Listing \ref{change} is used to create a radix node for a route with a specific address and mask. The key passed as a parameter is the index into the vector where the route is stored. Two or more concurrently executing threads create race conditions which can lead to memory leaks. This is explained pictorially in Figure \ref{fig:raceinchange}. Looking at the assignment, we see that if there are multiple threads executing \verb$change()$, there is a race for the assignment of the radix node. Multiple threads may call \verb+make_radix()+, but only one pointer which is returned by \verb+make_radix()+ is assigned. 
 \paragraph{Vector}
-When there are multiple updaters there is contention for acquiring an index into the vector. Many updaters trying to add a route might receive the same index value. If multiple updaters are given the same value of the index, there can be an inconsistency in the state of the vector. For example, the size of the vector might be stored wrongly or the freelist might be updated wrongly. Since the vector is resized dynamically, we could lose updates and have memory-leaks.\\
+When there are multiple updaters there is contention for acquiring an index into the vector. Many updaters trying to add a route might receive the same index value. If multiple updaters are given the same value of the index, there can be an inconsistency in the state of the vector. For example, the size of the vector might be stored wrongly or the freelist might be updated wrongly. Since the vector is resized dynamically, we could lose updates and have memory leaks.\\
 
 We explain the conflicts mentioned above with examples using the \verb+add_route()+ function shown in  Listing \ref{addroute}.
 \begin{lstlisting}[caption = The add\_route function, label=addroute,float=tph]
@@ -261,14 +260,14 @@ We explain the conflicts mentioned above with examples using the \verb+add_route
     } else {
       last_key = _default_key;
       if (!last_key || set)
-      _default_key = found + 1;
+        _default_key = found + 1;
     }
     if (last_key && old_route)
-    *old_route = _v[last_key - 1];
+      *old_route = _v[last_key - 1];
     if (last_key && !set)
-    return -EEXIST;
+      return -EEXIST;
     if (found == _v.size())
-    _v.push_back(route);
+      _v.push_back(route);
     else {
       _vfree = _v[found].extra;
       _v[found] = route;
@@ -281,21 +280,21 @@ We explain the conflicts mentioned above with examples using the \verb+add_route
     return 0;
   }
 \end{lstlisting}
-We consider two cases, one in which the concurrently executing threads retrieve an index from the freelist, the other in which the concurrently executing threads make a call to \verb+push_back()+ on the vector.
+We consider two cases, one in which the concurrently executing threads retrieve an index from the freelist, the other in which the concurrently executing threads make a call to \verb+push_back()+ on the vector.\\
 
-\paragraph{Case 1: Concurrent updaters use the freelist}
-We now illustrate how a race condition can corrupt the state of the vector. The same example is illustrated pictorially in Figure \ref{fig:raceinfreelist}
+\subsubsection{Case 1: Concurrent updaters use the freelist.}
+We now illustrate how a race condition can corrupt the state of the vector. The same example is illustrated pictorially in Figure \ref{fig:raceinfreelist}.
 Assume the freelist is as follows before the execution of this code sequence:\\
-\verb$freelist::{ 3 -> 1-> 5, _vfree =3}$. Consider the following sequence of events:
+Initially the freelist reads \texttt{\{\_vfree =3, $3\rightarrow1 \rightarrow 5$\}}. Consider the following sequence of events:
 \begin{enumerate}
-\item Thread 1 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M}.
-\item Thread 2 calls \emph{add\_route(Y,1,NULL,NULL) Y.addr = A, Y.mask =M}.
+\item Thread 1 calls \texttt{add\_route(Y,1,NULL,NULL)} with \texttt{Y.addr = A}, \texttt{Y.mask = M}.
+\item Thread 2 calls \texttt{add\_route(Y,1,NULL,NULL)} with \texttt{Y.addr = A}, \texttt{Y.mask = M}.
 \item Updater 1 and Updater 2 execute line 4 concurrently and recieve the same value of \emph{found}. Let us assume that \emph{found} is some key within the vector and is not equal to \emph{\_v.size()}. Updater 1 executes line 7 first. This updates the key in the radix tree to be the value \emph{found} which is $3$ according to our example.
-\item Updater 2 executes line 7. The value of the key is set to \emph{found} which is $3$ since the freelist has not changed.
+\item Updater 2 executes line 7. The value of the key is set to \emph{found} which is $3$ since the freelist has not changed. (See Figure \ref{fig:raceinfreelist}).
 \item Updater 1 executes the remaining code in \verb+add_route()+ including line 27 which sets  \verb+_v[found].extra+ to $-1$ (which means that the index is in use). After the Updater 1 has finished executing add\_route(), the freelist reads\\
-\verb$freelist::{ 1-> 5, _vfree =1}$.
-\item Updater 2 executes the remaining code sequence. It executes line 24 which sets \verb+_vfree+ to \emph{\_v[found].extra}. \verb+_v[found].extra+ has been set to $-1$ by Updater 1. Thus \verb+_vfree+ is now $-1$.\\
-The state of the freelist is now \verb$freelist::{ 1-> 5,_vfree = -1}$. The correct state is \verb$freelist::{ 1-> 5, _vfree = 1}$. If \verb+_vfree+ is $-1$, it means that there are no more free keys in the vector, which is not true. This sequence brings the vector into an inconsistent state.
+\texttt{\{\_vfree =1, $1 \rightarrow 5$\}}.
+\item Updater 2 executes the remaining code sequence. It executes line 24 which sets \texttt{\_vfree} to \texttt{\_v[found].extra}. \texttt{\_v[found].extra} has been set to $-1$ by Updater 1. Thus \texttt{\_vfree} is now $-1$.\\
+The state of the freelist is now \texttt{\{\_vfree = $-1$, $1 \rightarrow 5$\}}. The correct state is \texttt{\{\_vfree = 1, $1 \rightarrow 5$\}}. If \texttt{\_vfree} is $-1$, it means that there are no more free keys in the vector, which is not true. This sequence brings the vector into an inconsistent state. As a result, the routing table is also in an inconsistent state.\\
 \end{enumerate}
 
 \begin{figure}[tph]
@@ -327,14 +326,14 @@ Executes:
 found= (_vfree < 0 ?
         _v.size():_vfree)
 \end{Verbatim}
-Obtains a value $found = \_vfree = 3$ 
+Obtains a value \texttt{found= \_vfree= 3}
 &
 Executes:
 \begin{Verbatim}[baselinestretch=1,fontsize=\small]
 found= (_vfree < 0 ?
         _v.size():_vfree)
 \end{Verbatim}
-Obtains a value $found = \_vfree = 3$\\
+Obtains a value \texttt{found= \_vfree= 3}\\
 \hline
 \begin{tabular}{p{1.8in}}
 Executes:
@@ -361,13 +360,13 @@ Freelist is now updated as shown in the figure. This is wrong since $\_vfree$ is
 \end{tabular}\\
 \hline
 \end{tabular}
-\cprotect\caption{The example illustrates how two concurrent updaters can corrupt the sate of the freelist if they call \verb+add_route()+. The initial state of the freelist is as shown in the figure. The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.}
+\cprotect\caption{The example illustrates how two concurrent updaters can corrupt the sate of the freelist if they call \texttt{add\_route()}. The initial state of the freelist is as shown in the figure. The first parameter is the route, the second parameter asks the function to use the route supplied even if a route previously existed for that IP Address. The third parameter \emph{old\_route} retrieves a preexisting route for that IP if it is not set to NULL. The fourth parameter is the error handler.}
 \label{fig:raceinfreelist}
 \end{center}		
 \end{figure}
 
-\paragraph{Case 2: Concurrent updaters call \emph{push\_back} }
-Now consider the case when\\ \verb+_v.push_back()+ is executed concurrently. For this we will look at the Click code from vector.cc in Listing \ref{pushback}.
+\subsubsection{Case 2: Concurrent updaters call \texttt{push\_back()}. }
+Now consider the case when \texttt{\_v.push\_back()} is executed concurrently. For this we will look at the Click code from vector.cc in Listing \ref{pushback}.
 \begin{lstlisting}[caption = The push\_back() function, label=pushback]
   template <class T> inline void
   Vector<T>::push_back(const T& x)
@@ -379,8 +378,8 @@ Now consider the case when\\ \verb+_v.push_back()+ is executed concurrently. For
     reserve_and_push_back(RESERVE_GROW, &x);
   }
 \end{lstlisting}
-We first consider the case when there is enough space in the vector. Updater1 and Updater2 use the same value of \verb+_n+. The updater which wins the race installs its key at position i, and the other update is lost.
-We now consider the case when there is not enough space in the vector. The expression \verb$_n < _capacity$ evaluates to false. Some of the race conditions here could bring the vector to an inconsistent state or cause memory leaks. They are better understood with the help of the striking graphic example in Figure \ref{fig:raceinreserve} and the \verb+reserve_and_push_back()+ function shown in Listing \ref{reserveandpushback}. The assignment of \verb+new_l+ in line 15 of Listing \ref{reserveandpushback} is a race condition which can lead to a memory leak. The size of the leak is equal to the size of \verb+new_l+. The other consequence is that one update will be lost. If both the updaters call CLICK\_LFREE() in line 14, we could have a segmentation fault.
+We first consider the case when there is enough space in the vector. Updater 1 and Updater 2 use the same value of \verb+_n+. The updater which wins the race installs its key at position i, and the other update is lost.
+We now consider the case when there is not enough space in the vector. The expression \verb$_n < _capacity$ evaluates to false. Some of the race conditions here could bring the vector to an inconsistent state or cause memory leaks. They are better understood with the help of the graphic example in Figure \ref{fig:raceinreserve} and the \texttt{reserve\_and\_push\_back()} function shown in Listing \ref{reserveandpushback}. The assignment of \verb+new_l+ in line 15 of Listing \ref{reserveandpushback} is a race condition which can lead to a memory leak. The size of the leak is equal to the size of \verb+new_l+. The other consequence is that one update will be lost. If both the updaters call \texttt{CLICK\_LFREE()} in line 14, we could have a segmentation fault.
 
 \begin{figure}[tph]
 \begin{center}
@@ -428,7 +427,7 @@ The node is added to the radix tree.\\
   \raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorrace4}}\\\\
 \verb$CLICK_LFREE(_l, ...)$.\\  
    \raisebox{2ex - \height}{\includegraphics[scale=0.3]{../images/diagrams/vectorrace5}}\\\\
-  We have a segmentation fault since the thread attempts to free a pointer which is already freed.\\
+  Potential failure or memory corruption since the thread attempts to free a pointer which is already freed.\\
 \end{tabular}\\
 \hline
 \end{tabular}
@@ -443,11 +442,11 @@ The node is added to the radix tree.\\
                                   const T *push_x)
   {
     if (want < 0)
-    want = (_capacity > 0 ? _capacity * 2 : 4);
+      want = (_capacity > 0 ? _capacity * 2 : 4);
     if (want > _capacity) {
       T *new_l = (T *) CLICK_LALLOC(sizeof(T) * want);
       if (!new_l)
-      return false;
+        return false;
       for (size_type i = 0; i < _n; i++) {
         new(velt(new_l, i)) T(_l[i]);
         _l[i].~T();
@@ -457,27 +456,69 @@ The node is added to the radix tree.\\
       _capacity = want;
     }
     if (unlikely(push_x))
-    push_back(*push_x);
+      push_back(*push_x);
     return true;
   }
 \end{lstlisting}
-\paragraph{Verifying conflicts in Click}
-An approach similar to the one described in the Reader-Updater Conflicts section was followed here. We created a Click Elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete the same route having the same address but different values of the port. Both BashRadixIPLookup and PoundRadixIPLookup run concurrently on the same instance of RadixIPLookup. This concurrency is ensured by using the \emph{StaticThreadSched()} Element in the script.
-\begin{code}
-  BashRadixIPLookup::repeat 10,000 times {
+\subsubsection{Verifying conflicts in Click}
+ Click scripts were used to verify existing race conditions for checking correctness of our solutions. New Elements were created and run in multi-threaded mode. The \emph{StaticThreadSched()} Element was used to specify the thread on which the Element must be run. Listing \ref{lst:uuconflict} facilitates a clearer picture of the use of \emph{StaticThreadSched()} for this case. We created Click Elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete the same route with the same address but different values of the port. This is illustrated in Table \ref{tbl:uuverify}. Both BashRadixIPLookup and PoundRadixIPLookup run concurrently on the same instance of RadixIPLookup. This concurrency is ensured by using the \emph{StaticThreadSched()} Element in the script.
+\begin{lstlisting}[float=tph, caption=Click script for verifying updater-updater conflicts.,label=lst:uuconflict]
+Idle
+ -> r :: RadixIPLookup
+ -> Idle;
+
+writer0 :: PoundRadixIPLookup(r);
+writer1 :: BashRadixIPLookup(r);
+
+StaticThreadSched(
+        writer0 0,
+        writer1 1,
+);
+
+DriverManager(wait 3, print r.table, stop);
+
+\end{lstlisting}
+\begin{table}
+\begin{center}
+\begin{tabular}{|p{2.2in}|p{2.2in}|}
+\hline
+\begin{lstlisting}[label=lst:uubashradixiplookup]
+bool
+BashRadixIPLookup::
+run_task(Task *) {
+  ...
+  for( i=0; i<10000, i++) {
     add_route (A,X);
     delete_route (A,X);
   }
-  PoundRadixIPLookup::repeat 10,000 times {
+ ...
+}
+\end{lstlisting}
+&
+\begin{lstlisting}[label=lst:uupoundradixiplookup]
+bool
+PoundRadixIPLookup::
+run_task(Task *){
+  ...
+  for(i=0;i<10000,i++){
     add_route (B, Y);
     delete_route (B,Y);
-  } 
-\end{code}
+  }
+  ...
+}
+\end{lstlisting}\\
+\hline
+\end{tabular}
+\end{center}
+\caption{The \texttt{run\_task()} methods of BashRadixIPLookup and PoundRadixIPLookup.}
+\label{tbl:uuverify}
+\end{table}
+
 The tests resulted in segmentation faults and assertion failures, which did not occur if locks were acquired during updates.
 \subsection{Reader-Updater Conflicts}
-The conflicts in the RadixIPLookup Element occur primarily in two data structures: vector used to store the routes, and the radix-tree which stores a key indexing into the vector. The sections below describe the conflicts which occur in each of these data structures.
+The conflicts in the RadixIPLookup Element occur primarily in two data structures: the vector used to store the routes, and the radix tree which stores a key indexing into the vector. This section describes the conflicts which occur in each of these data structures.
 \paragraph{Radix Tree:}
-This section describes some of the reader-updater conflicts which exist and why they are not a source for concern. We take a look at a race which might arise and explain why it is not a serious problem.\\
+This section describes some of the reader-updater conflicts which exist and why they are not a source for concern.\\
 
 We now look at deletion of nodes within a radix tree. All pointers to the radix node are freed during a clean up phase of RadixIPLookup before it is destroyed. When a route is removed, the radix node corresponding to the route is not freed immediately. Instead all the radix nodes in the tree are deleted together at the end. This takes place in the call to \verb+free_radix()+. \verb+free_radix()+ is called on an instance of RadixIPLookup just before the instance is destroyed.\\
 
@@ -536,25 +577,7 @@ The library files in Click include a generic dynamically resized Vector class. T
 We can observe at least two inadmissible conflicts which can be caused by race conditions. Firstly, if two updaters and a reader run concurrently, the reader might get an index into an entry which has been freed and reused. The reader may end up receiving a route which is incorrect for the IP address in question. Secondly, a reader might access invalid memory in the presence of a concurrent updater. One must recall that the \verb+push_back()+ operation dynamically resizes the vector if necessary. If an updater initiates a dynamic resize operation amidst a concurrent reader, the reader might access invalid memory.
 
 \paragraph{Verifying conflicts in Click}
-The first conflict mentioned above was verified by running Click scripts. New Elements were created and run in multi-threaded mode.The \emph{StaticThreadSched()} Element was used to specify the thread on which the Element must be run. Listing \ref{scriptlisting} facilitates a clearer picture of the use of \emph{StaticThreadSched()} for this case.
-\begin{lstlisting}[caption = Click script for verifying reader-updater conflicts, label=scriptlisting]
-Idle
- -> r :: RadixIPLookup106(
-                0.0.0.0/0   8.1.1.1 0,
-                ) 
- -> Idle;
-
-reader :: ReadRadixIPLookup106(r);
-writer0:: BashRadixIPLookup106(r);
-writer1 :: PoundRadixIPLookup106(r);
-
-StaticThreadSched(
-        reader 0,
-        writer0 1,
-        writer1  2);
-
-DriverManager(stop);
-\end{lstlisting}
+The first conflict mentioned above was verified by running Click scripts.
 We created a Click Elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete a route having the for the same IP address but different port values.
 \begin{code}
   BashRadixIPLookup::repeat 10,000 times {
