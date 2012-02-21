@@ -1,5 +1,5 @@
 \documentclass[a4paper,marginparwidth=50pt,marginparsep=10pt]{article}
-\usepackage{graphicx}
+\usepackage[pdftex]{graphicx}
 \usepackage{fancyvrb}
 \usepackage{listings}
 \usepackage{epstopdf}
@@ -11,6 +11,7 @@
 \usepackage{calc}
 \usepackage{algorithmic}
 \usepackage{algorithm}
+\usepackage[ragged]{sidecap}
 %margins
 % Margin width
 \newlength{\marginwidth}
@@ -690,25 +691,29 @@ run_task(Task *){
 \pagebreak
 \section{The Solution}
 \label{sec:solution}
-The race conditions described in the previous sections occur due to threads accessing shared data structures. RCU is known to be an efficient synchronization technique for read-heavy workloads. We compare the performance of RCU with a reader-writer lock. The reader-writer lock approach is also described in this section.
+The race conditions described in the previous sections occur due to threads accessing shared data structures. RCU is known to be an efficient synchronization technique for read-heavy workloads. We first describe our solution using RCU. We then describe our solution using a reader-writer lock.
 
 \subsection{Read-Copy Update}
 
 \label{sec:rcu}
 
+
+\subsubsection{Conceptual Overview}
 RCU allows readers to proceed concurrently with an updater. The updater can \textbf{remove} shared data structures, but is not allowed to \textbf{delete} it. Multiple copies of shared data structures are maintained. The old copies are deleted when they are no longer being used. A thread reaches a quiescent state when it releases references to shared data structures. A grace period is reached when all threads have undergone at least one quiescent state. It is safe to delete stale copies (reclaim memory) during a grace period. Figure \ref{fig:rcuexp1} illustrates this concept.
 
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.4]{../images/diagrams/rcuexp0}
-\caption{Thread 1 and Thread 2 begin concurrent execution. A,B and C represent read-side critical sections which read the pointer \emph{x}. Z is an update-side critical section which updates the pointer \emph{x} by deleting the old pointer. A and B access \emph{x} when Z is in progress. We allow Z to remove the old pointer but we do not allow Z to \textbf{free} it. C reads the value of \emph{x} \textbf{after} Task Z has finished; it is not dependent on the older value of \emph{x}. It is safe to delete the older copy of \emph{x} after A and B have completed.}
+\caption{Thread 1 and Thread 2 begin concurrent execution. A, B and C represent read-side critical sections which read the pointer \emph{x}. Z is an update-side critical section which updates the pointer \emph{x} by deleting the old pointer. A and B access \emph{x} when Z is in progress. We allow Z to remove the old pointer but we do not allow Z to \textbf{free} it. C reads the value of \emph{x} \textbf{after} Task Z has finished; it is not dependent on the older value of \emph{x}. It is safe to delete the older copy of \emph{x} after A and B have completed.}
 \label{fig:rcuexp1} 
 \end{center}
 \end{figure}
 
+\pagebreak
+
 \subsubsection{RCU Using Timers}
 \label{sec:rcutimers}
-IP lookups are read-side critical sections. An IP lookup reads the routing table which is a shared data structure. IP lookups using RadixIPLookup finish within $1000$ ns on modern commodity machines \cite{lookuptime}. A fixed time interval $\ge 1000$ ns can be a grace period to free stale data-structures. An interval of $1000$ ns leads to very frequent reclamations. A very wide time interval can lead to infrequent reclamations and a larger memory footprint. So a convenient interval of $500$ ms is chosen.\\ 
+IP lookups are read-side critical sections. An IP lookup reads the routing table which is a shared data structure. IP lookups using RadixIPLookup finish within $1000$ ns on modern commodity machines \cite{lookuptime}. A fixed time interval $\ge 1000$ ns can be a grace period to free stale data-structures. An interval of $1000$ ns leads to very frequent reclamations. A very wide time interval can lead to infrequent reclamations, and consequently, a larger memory footprint. So a convenient interval of $500$ ms is chosen.\\ 
 
 Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our implementation involved using the Click Timer class to schedule reclamations. Click provides a Timer class which calls functions at specified time-intervals. We use this to schedule a callback which reclaims freed data at a time interval of $500$ ms.
 \begin{figure}[float=tph]
@@ -720,6 +725,7 @@ Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our imple
 \end{center}
 \end{figure}
 
+\pagebreak
 \subsubsection{RCU Using The Click Scheduling Loop}
 \label{rcuschedloop}
 
@@ -743,7 +749,7 @@ A \emph{task} in Click is something that requires CPU time or packet processing 
 \end{algorithm}
 
 \paragraph{Grace Periods and Reclamation}
-We describe our approach with the help of Figure \ref{fig:rcuexp2} in more formal terms as shown in Algorithm \ref{alg:rcu}. Each \emph{RouterThread} instance maintains a local epoch counter, $le$. The local epoch counter can either be zero or one. The application has a global epoch counter, $GE$. The global epoch counter is not physically stored; we only use it to explain and justify our approach. Initially all local epoch counters are set to one. After a thread completes a task, it resets its local epoch number. When the local epoch counters of all threads are reset, we reach a grace period. (All threads have released references to shared data structures they once held.) At this point, we reclaim stale data structures from the penultimate global epoch, increment the global epoch counter, set all local epoch counters and continue.
+We describe our approach with the help of Figure \ref{fig:rcuexp2} and in more formal terms using Algorithm \ref{alg:rcu}. Each \emph{RouterThread} instance maintains a local epoch counter, $le$. The local epoch counter can either be zero or one. The application has a global epoch counter, $GE$. The global epoch counter is not physically stored; we only use it to explain and justify our approach. Initially all local epoch counters are set to one. After a thread completes a task, it resets its local epoch number. When the local epoch counters of all threads are reset, we reach a grace period. (All threads have released references to shared data structures they once held.) At this point, we reclaim stale data structures from the penultimate global epoch, increment the global epoch counter, set all local epoch counters and continue.
 \begin{figure}[float=tph]
 \begin{center}
 \includegraphics[scale=0.36]{../images/diagrams/rcuexp2}
@@ -775,9 +781,9 @@ It is only safe to free \emph{x}  \textbf{after} \emph{global epoch 1} has passe
 \label{alg:rcu}
 \end{algorithmic}
 \end{algorithm}
-The transition between \emph{global epoch 1} and \emph{global epoch 2} in Figure \ref{fig:rcuexp2} is a grace period for updaters which finish in \emph{global epoch 1}. This is because any readers which start in \emph{global epoch 0} have finished by the end of \emph{global epoch 1}. It is safe to reclaim memory in \emph{global epoch 2}. We can extend this observation using Figure \ref{alg:rcu} and say that stale data accumulated in \emph{global epoch N} can be reclaimed \textbf{during} \emph{global epoch N+2}. Note that we cannot do this \textbf{during} \emph{global epoch N+1} since a reader which starts in \emph{global epoch N} might not finish until the end of \emph{global epoch N+1}.\\
+The transition between \emph{global epoch 1} and \emph{global epoch 2} in Figure \ref{fig:rcuexp2} is a grace period for updaters which finish in \emph{global epoch 0}. This is because any readers which start in \emph{global epoch 0} have finished by the end of \emph{global epoch 1}. It is safe to reclaim memory in \emph{global epoch 2}. We can extend this observation using Figure \ref{alg:rcu} and say that stale data accumulated in \emph{global epoch N} can be reclaimed \textbf{during} \emph{global epoch N+2}. Note that we cannot do this \textbf{during} \emph{global epoch N+1} since a reader which starts in \emph{global epoch N} might not finish until the end of \emph{global epoch N+1}.\\
 
-In order to facilitate reclamation of stale data of \emph{global epoch N-2} in \emph{global epoch N}, we maintain two lists: a \emph{reclaim\_now} list and a \emph{reclaim\_later} list. When an updater modifies a shared data structure, we maintain the older copy. The older copy is also added to the \emph{reclaim\_later} list. Whenever a grace period is reached:
+In order to facilitate reclamation of stale data accumulated during \emph{global epoch N} in \emph{global epoch N+2}, we maintain two lists: a \emph{reclaim\_now} list and a \emph{reclaim\_later} list. When an updater modifies a shared data structure, we maintain the updated copy as well as the older copy. The older copy is also added to the \emph{reclaim\_later} list. Whenever a grace period is reached:
 \begin{enumerate}
 \item Reclaim everything in the \emph{reclaim\_now} list. The \emph{reclaim\_now} list becomes empty after this step completes.
 \item Swap the \emph{reclaim\_now} list and the \emph{reclaim\_later} list.\\
@@ -792,9 +798,9 @@ For our scheme, we can provide the two RCU guarantees expressed in \cite{urcu}. 
 \begin{algorithmic}
 \STATE Any outstanding tasks in $GE=N-2$ have finished in epoch $GE=N$.
 \STATE Proof by case analysis:
-\STATE Case Epoch $GE=0$: no tasks have run earlier and there have been no grace periods.
-\STATE Case Epoch $GE=k$: Any outstanding tasks in $GE=k-2$ have finished and this epoch is a grace period for epoch $GE=k-2$. 
-\STATE Assume that this statement is false, i.e that currently $GE=k$ and that outstanding tasks from epoch $GE=k-2$ have not finished. The condition for GE to advance to epoch $k$ from epoch $k-1$ was that all threads have their  $le_i=0$. We know that $\forall le_i, le_i=1$ at the start of epoch $k-1$. \\So $\forall \mbox{ threads }t_i\mbox{ }$ $\exists$ some task which was finished by the thread before the end of epoch $k-1$. Proved by contradiction.  
+\STATE Case \textbf{Epoch} $\bf GE=0$: no tasks have run earlier and there have been no grace periods.
+\STATE Case \textbf{Epoch} $\bf GE=k$: Any outstanding tasks in $GE=k-2$ have finished and this epoch is a grace period for epoch $GE=k-2$. 
+\STATE The condition for GE to advance from epoch $k-1$ to epoch $k$ is that $\forall le_i, le_i=0$. At the start of epoch $k-1$, we know that $\forall le_i, le_i=1$.\\ $le_i$ is reset to 0 only after thread $t_i$ finishes some task. So $\forall \mbox{ threads }t_i\mbox{ }$ $\exists$ some task that was finished by the thread before the end of epoch $k-1$. 
 \end{algorithmic}
 
 \item \emph{Publication Guarantee:} 
@@ -804,9 +810,13 @@ Although readers proceed concurrently with writers, readers must see either the 
 
 We observe that our approach is similar to the \emph{fuzzy barrier} approach described by Hart et al. \cite{hart}. In our scheme, the barrier is the condition which checks that all local epoch variables are set to zero. The barrier protects access to the reclamation code. This barrier is fuzzy because the threads resume execution of other tasks if they are unable cross the barrier and reclaim (non-blocking).
 
+\subsubsection{Protecting against Updater-Updater Conflicts}
+RCU allows concurrent readers to proceed amidst other readers or a concurrent updater. Concurrent updaters require some form of synchronization. We use locks around update-side critical sections to synchronize concurrent updaters.
+
 \subsection{Reader-Writer Lock}
-Locking solves our problems since it prevents two threads from simultaneously accessing shared data. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock. 
- Our coarse-grained locking approach involves locking around the entire read-side or update-side critical sections. This is illustrated in the \verb+add_route()+ function shown in Listing \ref{addroutereaderwriterlocklisting}, where a lock is acquired around the entire update-side critical section. Similar locking is used around the read-side critical section in \verb+lookup_route()+ (Listing \ref{lookuproutereaderwriterlocklisting}).
+We have compared the performance of the RCU approach with that of a reader-writer lock. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock.\\
+
+Our approach involves locking around the entire read-side or update-side critical section. This is illustrated in the \verb+add_route()+ function shown in Listing \ref{addroutereaderwriterlocklisting}, where a lock is acquired around the entire update-side critical section. Similar locking is used around the read-side critical section in \verb+lookup_route()+ (Listing \ref{lookuproutereaderwriterlocklisting}).
 \begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting,float=tph]
 int RadixIPLookup107::lookup_route(IPAddress addr, 
                                    IPAddress &gw) const
@@ -833,7 +843,8 @@ RadixIPLookup107::add_route(const IPRoute &route,
   _lock.release_write();
   return 0;
 }
-\end{lstlisting}  
+\end{lstlisting}
+\pagebreak  
 \subsection{Performance Hypothesis}
 \label{sec:perfhypothesis}
 RCU is known to work best for a reader-heavy workload with a small number of updaters. Our claim is that the RCU mechanism for click outlined above has almost zero reader-side overhead. Readers being lock-free and wait-free, we expect RCU performance to be comparable to the original version when there are only readers.\\
@@ -907,12 +918,14 @@ is not thread safe.
 \end{table}
 
 \begin{figure}[tph]
-\includegraphics[scale = 0.7]{../images/graphs/macro_vr_0w}
-\caption{Performance of increasing number of readers with zero writers using the 167k routing table.}
+\centering
+\includegraphics[scale=0.8]{../images/graphs/macro_vr_0w}
+\caption[justification=justified]{Performance of increasing number of readers with zero writers using the 167k routing table. Performance of RCU is very close to non-locking performance. Performance of the reader-writer lock degrades linearly.}
 \label{img:macro_vr_0w}
 \end{figure}
 
 \begin{figure}[tph]
+\centering
 \includegraphics[scale = 0.7]{../images/graphs/profile_lockcount_macro_rwl_vr_0w}
 \caption{Number of lock acquisition attempts while using the reader-writer lock for a pure reader workload.}
 \label{img:profile_rwl_locks_vr_0w}
@@ -945,6 +958,7 @@ the read side critical section is shown in Figure \ref{img:profile_rwl_locks_vr_
 
 
 \begin{figure}[tph]
+\centering
 \includegraphics[scale = 0.7]{../images/graphs/macro_vr_1w}
 \caption{Performance of increasing number of readers and one writer with the 167k routing table.}
 \label{img:macro_vr_1w}
@@ -952,6 +966,7 @@ the read side critical section is shown in Figure \ref{img:profile_rwl_locks_vr_
 
 
 \begin{figure}[tph]
+\centering
 \includegraphics[scale = 0.7]{../images/graphs/profile_lockcount_macro_rwl_vr_1w}
 \caption{Number of lock acquisition attempts for workload with increasing number of readers and one writer while using a reader-writer lock.}
 \label{img:profile_rwl_locks_vr_1w}
@@ -985,6 +1000,7 @@ It is clear that RCU is not as fabulous for write intensive workloads. These wor
 
 
 \begin{figure}[tph]
+\centering
 \includegraphics[scale = 0.7]{../images/graphs/macro_0r_vw}
 \caption{Performance of increasing number of writers and zero readers with the 167k routing table.}
 \label{img:macro_0r_vw}
@@ -1001,6 +1017,7 @@ It is clear that RCU is not as fabulous for write intensive workloads. These wor
 
 
 \begin{figure}[tph]
+\centering
 \includegraphics[scale = 0.7]{../images/graphs/macro_1r_vw}
 \caption{Performance of increasing number of writers and one reader with the 167k routing table.}
 \label{img:macro_1r_vw}
@@ -1028,9 +1045,8 @@ The Click configuration file used for this purpose is shown in Listing \ref{lst:
 \end{table}
 
 \begin{figure}[tph]
-\fbox{
+\centering
 \includegraphics[scale = 0.7]{../images/graphs/micro_vr_0w}
-}
 \caption{Performance comparison over a workload with increasing number of readers and zero writers.}
 \label{img:micro_vr_0w}
 \end{figure}
@@ -1072,9 +1088,7 @@ RCU scales over an increase in the number of threads, however the reader-writer 
 
 \begin{figure}[tph]
 \begin{center}
-\fbox{
 \includegraphics[scale = 0.7]{../images/graphs/micro_vr_1w}
-}
 \caption{Performance comparison of increasing number of readers with one writer.}
 \label{img:micro_vr_1w}
 \end{center}
@@ -1092,13 +1106,10 @@ We now compare the performance of RCU with the reader-writer lock for a write in
 \end{table}
 
 \begin{figure}[tph]
-\begin{center}
-\fbox{
+\centering
 \includegraphics[scale = 0.7]{../images/graphs/micro_0r_vw}
-}
 \caption{Performance comparison of increasing number of writers with zero readers.}
 \label{img:micro_0r_vw}
-\end{center}
 \end{figure}
 
 \begin{table}[tph]
@@ -1110,16 +1121,13 @@ We now compare the performance of RCU with the reader-writer lock for a write in
 \end{table}
 
 \begin{figure}[tph]
-\begin{center}
-\fbox{
+\centering
 \includegraphics[scale = 0.7]{../images/graphs/micro_1r_vw}
-}
 \caption{Performance comparison of increasing number of writers with one reader.}
 \label{img:micro_1r_vw}
-\end{center}
 \end{figure}
 
-
+\pagebreak
 \section{Conclusion}
 Lookup performance in a software router such as Click is crucially
 important. Leveraging multicore processors which are available in almost all commodity hardware
@@ -1147,8 +1155,16 @@ We have experimented with the RadixIPLookup Element in Click. However, it would 
 
 Our approach uses RCU for the vector in RadixIPLookup, however a coarse grained lock is acquired for updates to the radix tree. The size of the radix tree depends on the size of the routing table, which is typically very large. Thus implementing RCU based synchronization for the radix tree would be very useful.
 \section{Acknowledgements}
-I am tremendously grateful to my advisor, Professor Eddie Kohler for his continued guidance, support and ideas.
-Rohit Kumar contributed equally to this project. I am grateful to him for insightful discussions, code and comments.
+I am tremendously grateful to my advisor, Professor Eddie Kohler for
+his continued guidance, support and ideas. His eye for detail, grace and relevance made working with him a
+privilege. This project was a learning curve for me, and Professor Eddie has supported me
+through his feedback and insight all along the way.
+
+Rohit Kumar contributed equally to this project. This work reflects his energy and inputs. Rohit worked in an organized manner, and has a knack for automation and elegance.
+I've learned a lot from him.
+
+I am thankful to my parents and sister for their unconditional loving support.
+
 \bibliography{rcu_report}
 \bibliographystyle{plain}
 \end{document}

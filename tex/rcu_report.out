@@ -17,8 +17,10 @@
 \BOOKMARK [3][-]{subsubsection.5.3.3}{Verifying conflicts in Click}{subsection.5.3}
 \BOOKMARK [1][-]{section.6}{The Solution}{}
 \BOOKMARK [2][-]{subsection.6.1}{Read-Copy Update}{section.6}
-\BOOKMARK [3][-]{subsubsection.6.1.1}{RCU Using Timers}{subsection.6.1}
-\BOOKMARK [3][-]{subsubsection.6.1.2}{RCU Using The Click Scheduling Loop}{subsection.6.1}
+\BOOKMARK [3][-]{subsubsection.6.1.1}{Conceptual Overview}{subsection.6.1}
+\BOOKMARK [3][-]{subsubsection.6.1.2}{RCU Using Timers}{subsection.6.1}
+\BOOKMARK [3][-]{subsubsection.6.1.3}{RCU Using The Click Scheduling Loop}{subsection.6.1}
+\BOOKMARK [3][-]{subsubsection.6.1.4}{Protecting against Updater-Updater Conflicts}{subsection.6.1}
 \BOOKMARK [2][-]{subsection.6.2}{Reader-Writer Lock}{section.6}
 \BOOKMARK [2][-]{subsection.6.3}{Performance Hypothesis}{section.6}
 \BOOKMARK [1][-]{section.7}{Performance Evaluation}{}
