@@ -813,6 +813,64 @@ We observe that our approach is similar to the \emph{fuzzy barrier} approach des
 \subsubsection{Protecting against Updater-Updater Conflicts}
 RCU allows concurrent readers to proceed amidst other readers or a concurrent updater. Concurrent updaters require some form of synchronization. We use locks around update-side critical sections to synchronize concurrent updaters.
 
+\subsubsection{The RCU API for Userlevel Click Elements}
+ We describe the API for userlevel Elements, which can be used by an Element to provide RCU synchronization. This section describes how an Element can use the API to provide RCU synchronization as well as how the API interfaces with the driver loop in Click.
+\paragraph{Requirements for Userlevel Elements}
+ We have provided a class called ReclaimHook displayed in Listing \ref{lst:reclaimhook}. A userlevel Element which seeks to use RCU synchronization using our API should follow the procedure outlined below:
+\begin{enumerate}
+\item The Element should declare a ReclaimHook variable as a member of the class (for example, declare \texttt{ReclaimHook \_reclaimhook}).
+\item The Element should provide a \texttt{reclaim()} method as a member function or as a member of a subclass. The instance of the class containing the \texttt{reclaim()} function is the \emph{Reclaimable} object. \\ This function should reclaim stale data from the \texttt{reclaim\_later} list when called, using the mechanism described in Section \ref{sec:rcuschedloop}.
+\item The ReclaimHook should be initialized using \texttt{initialize(this)} before any reclamations are scheduled.
+\item Reclamations can be scheduled or unscheduled using the \texttt{schedule()} or \texttt{unschedule()} methods respectively.
+\item Update-side critical sections must be protected using locks (unless a single updater thread is used).
+\end{enumerate}
+ 
+\begin{lstlisting}[float=tph, caption=The ReclaimHook class which allows elements to schedule reclamations, label=lst:reclaimhook]
+class ReclaimHook:public Hook {
+
+  public:
+    inline ReclaimHook(Reclaimable *);
+    inline ~ReclaimHook() {}
+
+    inline void initialize(Element *);
+    inline bool scheduled()  { return _is_scheduled; }
+    inline void schedule()   { _is_scheduled = true; } 
+    inline void unschedule() { _is_scheduled = false; }
+    inline void fire();
+
+    private:
+    Element *_owner;
+    void * _thunk;
+    bool _is_scheduled;
+    
+
+};
+
+inline
+ReclaimHook::ReclaimHook(Reclaimable *r)
+    :_thunk(r), _is_scheduled(false){
+
+}
+
+void
+ReclaimHook::initialize(Element *owner) {
+    assert(owner);
+    Router *router = owner->router();    
+    router->master()->add_reclaim_hook(this);
+    _owner = owner;
+}
+
+
+void
+ReclaimHook::fire() {
+  if(_thunk) {
+    ((Reclaimable *)_thunk)->reclaim();
+  }
+}
+\end{lstlisting}
+
+\paragraph{API Usage in the Driver Loop}
+\pagebreak
 \subsection{Reader-Writer Lock}
 We have compared the performance of the RCU approach with that of a reader-writer lock. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock.\\
 
@@ -1035,7 +1093,6 @@ The reader-writer lock does not scale with an increase in the number of threads.
 
 The Reader-Writer lock spends time acquiring a lock on reads while RCU does not have any additional overhead for readers. Any additional overhead of RCU over the vanilla version is due to the overhead in checking reclaim lists and detecting quiescent states.
 
-The Click configuration file used for this purpose is shown in Listing \ref{lst:readercomparison}.
 \begin{table}
 \begin{center}
 \input{micro_vr_0w.tex}
@@ -1050,29 +1107,6 @@ The Click configuration file used for this purpose is shown in Listing \ref{lst:
 \caption{Performance comparison over a workload with increasing number of readers and zero writers.}
 \label{img:micro_vr_0w}
 \end{figure}
-
-\begin{lstlisting}[float=tph, caption = A Click configuration file for 4 readers, label =lst:readercomparison]
-Idle
- -> r :: RadixIPLookup106(
-                1.1.1.0/32  8.1.1.1 0,
-                0.0.0.0/0   8.1.1.1 0,
-                ) 
- -> Idle;
-
-reader :: ReadRadixIPLookup106(r);
-reader1 :: ReadRadixIPLookup106(r);
-reader2 :: ReadRadixIPLookup106(r);
-reader3 :: ReadRadixIPLookup106(r);
-StaticThreadSched(
-        reader 0,
-        reader1 1,
-        reader2 2,
-        reader3 3
-);
-
-DriverManager(stop);
-
-\end{lstlisting}
 
 \paragraph{Read Intensive workloads}
 We now compare the performance of RCU over the reader-writer lock in the presence of a writer. This workload reflects typical router usage. We refer the reader to Table \ref{tbl:micro_vr_1w} and Figure \ref{img:micro_vr_1w} for the results.
@@ -1143,7 +1177,7 @@ mechanism to detect quiescent states and an API which can be used by
 a userlevel Element in Click.
 
 We have verified through our benchmarks that
-this mechanism does indeed have a very low reader side overhead. The RCU approach is also up to 70\% better than a reader-writer lock on read intensive workloads.
+this mechanism does indeed have a very low reader side overhead (within 1.1 times non-locking performance). The RCU approach is also up to 27 times faster than a reader-writer lock on read intensive workloads.
 
 \section{Future Work}
 
