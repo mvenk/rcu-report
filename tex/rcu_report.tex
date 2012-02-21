@@ -59,9 +59,9 @@ Madhuri Venkatesh
 
 \pagebreak
 \section{Abstract}
-High performance routing lookups are critically important for packet forwarding. Routers must perform a lookup for every packet. As line rates exceed 40Gbps \cite{attlinkrate}, routers are required to perform 125 million lookups a second (assuming a minimum packet size of 40 bytes). Additionally, routers are required to perform sophisticated packet processing providing services which support security, video and mobility \cite{routebricks}. Software routers are more flexible and extensible for such processing when compared to hardware routers. However, software routers are an order of magnitude slower than their hardware counterparts \cite{cansoftwareroutersscale}. With multi-core systems becoming more popular and more prevalent, leveraging them is key to improving performance in software routers. However, obtaining a simultaneously correct and fast thread-safe solution remains challenging. For example, conventional locking allows only a single thread to access a shared data structure at a time. Although this solution is easily correct, it does not take complete advantage of the available parallelism, and is evidently slower. Reader-writer locks which allow readers to proceed concurrently with other readers, but not with updaters are faster in comparison, yet slower than non-locking sequential performance.\\
+High performance routing lookups are critically important for packet forwarding. Routers must perform a lookup for every arriving packet. As line rates exceed 40Gbps \cite{attlinkrate}, routers are required to perform 125 million lookups a second (assuming a minimum packet size of 40 bytes). Additionally, routers are required to perform sophisticated packet processing providing services which support security, video and mobility \cite{routebricks}. Software routers are more flexible and extensible for such processing when compared to hardware routers. However, software routers are an order of magnitude slower than their hardware counterparts \cite{cansoftwareroutersscale}. With multi-core systems becoming more popular and more prevalent, leveraging them is key to improving performance in software routers. However, obtaining a simultaneously correct and fast thread-safe solution remains challenging. For example, conventional locking allows only a single thread to access a shared data structure at a time. Although this solution is easily correct, it does not take complete advantage of the available parallelism, and is evidently slower. Reader-writer locks, which allow readers to proceed concurrently with other readers, but not with updaters are faster in comparison, yet slower than non-locking sequential performance.\\
 
-We have described an approach for providing thread-safety using \emph{Read-Copy Update} (RCU) \cite{readcopyupdate}. RCU is a synchronization technique which scales efficiently on read intensive workloads. It has very low read side overhead, allowing readers to proceed concurrently with other readers and updaters. A typical router workload is read intensive with 0-5\% updates. For such a workload, using a commodity 8 core machine, we have verified that the performance of the RCU approach is near non-locking sequential performance and is up to 27 times faster than a reader-writer lock.
+We have described an approach for providing thread-safety using \emph{Read-Copy Update} (RCU) \cite{readcopyupdate}. RCU is a synchronization technique which scales efficiently on read intensive workloads. It has very low read side overhead, allowing readers to proceed concurrently with other readers and updaters. A typical router workload is read intensive, with 0-5\% updates. For such a workload, using a commodity 8 core machine, we have verified that the performance of the RCU approach is near non-locking sequential performance, and is up to 27 times faster than a reader-writer lock.
 
 \section{Introduction}
 The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Apart from performing route lookups, routers are also required to support a variety of other functions such as encryption, classification, inspection and filtering \cite{routebricks}. Software routers are more flexible and easily extensible for integrating and adding such functionality when compared to hardware routers. However software routers struggle to comfortably scale beyond 10 Gbps \cite{routebricks}, being far outpaced by line rates which exceed 40 Gbps \cite{attlinkrate}.\\
@@ -179,9 +179,25 @@ The vector is initialized to hold a specific number of entries (\verb+_capacity+
 
 \section{The Problem}
 \label{sec:problem}
-Our goal is to improve lookup performance by allowing for multithread access to Click Elements. In this section we look at existing problems which hinder safe multithreaded access.\\
+Our goal is to improve lookup performance by allowing for multi-thread
+access to Click Elements. In this section we look at existing problems
+which hinder safe multi-thread access.\\
 
-This section is divided into Updater-Updater Conflicts and Reader-Updater Conflicts. The Updater-Updater conflicts section describes how multiple updaters can cause race conditions which corrupt the state of shared data structures. The Reader-Updater Conflicts section describes how a reader racing with an updater might read stale or invalid data.
+This section is divided into Updater-Updater Conflicts and
+Reader-Updater Conflicts. The Updater-Updater conflicts section
+describes how multiple updaters can cause race conditions which
+corrupt the state of shared data structures. The Reader-Updater
+Conflicts section describes how a reader racing with an updater might
+read stale or invalid data.
+
+\subsection{Correctness}
+\label{sec:correctness}
+Before analyzing race-conditions, we define what we deem acceptable results for concurrent reads and updates.
+\begin{enumerate}
+\item Concurrent updaters exhibit \emph{sequentially consistent} behavior \cite{seqconsistency}.\\ The result of concurrent updates is as if the updates were applied in some sequential order.
+\item Concurrent reads are \emph{eventually consistent} \cite{eventualconsistency}.\\ Concurrent readers must receive some valid route. Specifically, if a lookup (read) for an IP Address \emph{A} returns a route \emph{R}, then for some duration of time, R was a valid route for IP Address \emph{A}. Note that R need not be the most up to date route for IP Address \emph{A} --- address lookups can result in receiving stale routes for short time periods. However, address lookups (reads) must eventually return the most up to date route.
+
+\end{enumerate} 
 \subsection{Updater-Updater Conflicts}
 We now deal with race-conditions and conflicts arising due to multiple updaters running concurrently using the same instance of RadixIPLookup. When multiple threads use the same instance of RadixIPLookup, they access the same data structures within RadixIPLookup.
 \paragraph{Radix Tree}
@@ -461,7 +477,8 @@ The node is added to the radix tree.\\
   }
 \end{lstlisting}
 \subsubsection{Verifying conflicts in Click}
- Click scripts were used to verify existing race conditions for checking correctness of our solutions. New Elements were created and run in multi-threaded mode. The \emph{StaticThreadSched()} Element was used to specify the thread on which the Element must be run. Listing \ref{lst:uuconflict} facilitates a clearer picture of the use of \emph{StaticThreadSched()} for this case. We created Click Elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete the same route with the same address but different values of the port. This is illustrated in Table \ref{tbl:uuverify}. Both BashRadixIPLookup and PoundRadixIPLookup run concurrently on the same instance of RadixIPLookup. This concurrency is ensured by using the \emph{StaticThreadSched()} Element in the script.
+\label{sec:uuconflicts}
+ Click scripts were used to verify existing race conditions for checking correctness of our solutions. New Elements were created and run in multi-threaded mode. The \emph{StaticThreadSched()} Element was used to specify the thread on which the Element must be run. Listing \ref{lst:uuconflict} facilitates a clearer picture of the use of \emph{StaticThreadSched()} for this case. We created Click Elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete the same route with the same address but different values of the port. This is illustrated in Table \ref{tbl:uuverify}. The parameters for \texttt{add\_route()} mentioned in the listing are simplified. Both BashRadixIPLookup and PoundRadixIPLookup run concurrently on the same instance of RadixIPLookup. This concurrency is ensured by using the \emph{StaticThreadSched()} Element in the script.
 \begin{lstlisting}[float=tph, caption=Click script for verifying updater-updater conflicts.,label=lst:uuconflict]
 Idle
  -> r :: RadixIPLookup
@@ -516,13 +533,47 @@ run_task(Task *){
 
 The tests resulted in segmentation faults and assertion failures, which did not occur if locks were acquired during updates.
 \subsection{Reader-Updater Conflicts}
-The conflicts in the RadixIPLookup Element occur primarily in two data structures: the vector used to store the routes, and the radix tree which stores a key indexing into the vector. This section describes the conflicts which occur in each of these data structures.
-\paragraph{Radix Tree:}
-This section describes some of the reader-updater conflicts which exist and why they are not a source for concern.\\
+The conflicts in the RadixIPLookup Element occur primarily in two data structures: the vector used to store the routes, and the radix tree which stores a key indexing into the vector. This section describes the conflicts which occur in each of these data structures.\\
 
-We now look at deletion of nodes within a radix tree. All pointers to the radix node are freed during a clean up phase of RadixIPLookup before it is destroyed. When a route is removed, the radix node corresponding to the route is not freed immediately. Instead all the radix nodes in the tree are deleted together at the end. This takes place in the call to \verb+free_radix()+. \verb+free_radix()+ is called on an instance of RadixIPLookup just before the instance is destroyed.\\
+\subsubsection{Reader-Updater conflicts in the Vector}
+We look at reader-updater conflicts which involve read delete races, and discuss their consequences.
+The race conditions are described in the context of the \verb+add_route()+ function which adds a route
+to the radix tree. The way an index is obtained for insertion is
+summarized using the pseudo-code in Listing \ref{lst:pseudoaddroute}.
+\begin{lstlisting}[caption = Pseudo-code for acquiring an index in \texttt{add\_route()}, label=lst:pseudoaddroute]
+  if(free_list is not empty) {
+    index = free_list; free_list = free_list->next;
+    _v[free_list.index] = val;
+  } else
+    _v.push_back(val);
+\end{lstlisting}
+We can observe at least two inadmissible conflicts which can be caused
+by race conditions. Firstly, if two updaters and a reader run
+concurrently, the reader might get an index into an entry which has
+been freed and reused. The reader may end up receiving a route which
+is incorrect for the IP address in question. Figure
+\ref{race_readerfigure} illustrates this race. BashRadixIPLookup and
+PoundRadixIPLookup are two updaters which update the routing table by
+adding a route. ReadRadixIPLookup performs a lookup for IP address
+A. There is a chance that the lookup returns a route which was never a
+valid route for IP address A. This does not observe the correctness
+policy described in Section \ref{sec:correctness}. Secondly, a reader
+might access invalid memory in the presence of a concurrent
+updater. One must recall that the \verb+push_back()+ operation
+dynamically resizes the vector if necessary. If an updater initiates a
+dynamic resize operation amidst a concurrent reader, the reader might
+access invalid memory.
 
-We will now look at a race condition which can occur in the radix tree when a reader and an updater execute concurrently. Consider a case where we have a reader and an updater running concurrently. The updater deletes route X, the reader performs a lookup on the very route X.
+\subsubsection{Reader-Updater Conflicts in the Radix Tree}
+This section describes some of the reader-updater conflicts which
+exist within the radix tree and justifies why they are not a source
+for concern.\\
+
+We will now look at a race condition which can occur in the radix tree
+when a reader and an updater execute concurrently. Consider a case
+where we have a reader and an updater running concurrently. The
+updater deletes route X which holds information for IP Address A, the reader performs a lookup on the very
+route A.\\
 \begin{figure}[tph]
 \begin{center}
 \includegraphics[scale=0.6]{../images/diagrams/race1eps.eps}
@@ -530,8 +581,18 @@ We will now look at a race condition which can occur in the radix tree when a re
 \caption{Race condition with a concurrent reader and updater}
 \label{race1figure}
 \end{figure}
-\\\\
-We have two threads one running: \emph{Updater:: \{remove Route X\}} and the other running: \emph{Reader::\{read Route A\}}. The reader might receive stale information for Route X. This happens if the reader acquires a reference to the radix node containing Route X before the pointer is removed from the tree. The race is illustrated with the help of the sequence diagram in \ref{race1figure}. However, readers which execute after the updater has finished will not recieve stale data for Route X.
+We have two threads one running: an updater thread trying to remove a
+route X from the routing table, and a reader thread performing a
+lookup for IP Address A. The reader might receive stale information
+for A. This happens if the reader acquires a reference to the radix
+node containing Route X before the pointer is removed from the
+tree. The race is illustrated with the help of the sequence diagram in
+\ref{race1figure}. However, readers which execute after the updater
+has finished will not receive stale data for Route X. These results are acceptable according
+to our correctness requirement specified in \ref{sec:correctness}.
+This is justified by the argument that the reader received
+a stale route: it was once valid for the given address, and the
+ultimate price paid is the price of one wrong lookup, which as we said above, is acceptable by our policy.
 \begin{lstlisting}[caption= The remove\_route() function, label=removeroute,float=tph]
   int
   RadixIPLookup::remove_route(const IPRoute& route, 
@@ -545,11 +606,11 @@ We have two threads one running: \emph{Updater:: \{remove Route X\}} and the oth
       // NB: this will never actually make changes
       last_key = _radix->change(addr, mask, 0, false);
     } else
-    last_key = _default_key;
+      last_key = _default_key;
     if (last_key && old_route)
-    *old_route = _v[last_key - 1];
+      *old_route = _v[last_key - 1];
     if (!last_key || !route.match(_v[last_key - 1]))
-    return -ENOENT;
+      return -ENOENT;
     _v[last_key - 1].extra = _vfree;
     _vfree = last_key - 1;
     if (route.mask) {
@@ -557,42 +618,16 @@ We have two threads one running: \emph{Updater:: \{remove Route X\}} and the oth
       uint32_t mask = ntohl(route.mask.addr());
       (void) _radix->change(addr, mask, 0, true);
     } else
-    _default_key = 0;
+      _default_key = 0;
     return 0;
   }
 \end{lstlisting}
-The occurrence of the race mentioned above is rather rare: firstly a read intensive, infrequent update workload is expected but the aforementioned race is more likely in an update intensive workload. Secondly reads are fast compared to updates, so the possibility that a read operation starts before an update and ends after an update is quite small. That being said, we assume that the consequences of the race illustrated in the example above are acceptable. This is justified by the argument that the reader received a stale route: it was once valid route for the given address, and the ultimate price paid is the price of one wrong lookup.
-\paragraph{Vector:}
-The library files in Click include a generic dynamically resized Vector class. This class and its use in RadixIPLookup has been explained in the Background section. The conflicts are explained in the context of the \verb+add_route()+ function which adds a route to the radix tree. The code for the \verb+add_route()+ function is given in Listing \ref{pseudoaddroute}. The way an index is obtained for insertion is summarized in the pseudocode below. 
-\begin{lstlisting}[caption = Pseudocode for acquiring an index in add\_route, label=pseudoaddroute]
-  if(free_list is not empty)
-  {
-    index = free_list;
-    free_list = free_list -> next;
-    _v[free_list.index] = val;
-  }
-  else 
-  _v.push_back(val);
-\end{lstlisting}
-We can observe at least two inadmissible conflicts which can be caused by race conditions. Firstly, if two updaters and a reader run concurrently, the reader might get an index into an entry which has been freed and reused. The reader may end up receiving a route which is incorrect for the IP address in question. Secondly, a reader might access invalid memory in the presence of a concurrent updater. One must recall that the \verb+push_back()+ operation dynamically resizes the vector if necessary. If an updater initiates a dynamic resize operation amidst a concurrent reader, the reader might access invalid memory.
 
-\paragraph{Verifying conflicts in Click}
-The first conflict mentioned above was verified by running Click scripts.
-We created a Click Elements called BashRadixIPLookup and PoundRadixIPLookup which repeatedly add and delete a route having the for the same IP address but different port values.
-\begin{code}
-  BashRadixIPLookup::repeat 10,000 times {
-    add_route (A,X);
-    delete_route (A,X);
-  }
-  PoundRadixIPLookup::repeat 10,000 times {
-    add_route (B, Y);
-    delete_route (B,Y);
-  } 
-  ReadRadix:: repeat 10,000 times {
-    port = Read (A);
-  }
-\end{code}
-A and B are the addresses, X and Y are the values of the port. The least-common ancestor of A and B is the root node. The parameters for \emph{Add route} mentioned here are not the same as add\_route() used in \emph{RadixIPLookup}. The pseudocode presented above is simplified to illustrate the motive behind our method of verifying conflicts.
+\subsubsection{Verifying conflicts in Click}
+Some of the conflicts mentioned in Section were verified by running Click scripts. Our approach for verifying reader-updater conflicts is the similar to the one mentioned in Section \ref{sec:uuconflicts}. Click Elements BashRadixIPLookup, PoundRadixIPLookup repeatedly update the routing table. ReadRadixIPLookup repeatedly performs a route lookup. Table \ref{tbl:ruverify} shows how these Elements are used to verify conflicts. ReadRadixIPLookup, PoundRadixIPLookup and BashRadixIPLookup run concurrently on an instance of RadixIPLookup. A and B are the addresses, X and Y are the values of the port. The least-common ancestor of A and B is the root node. Locks are acquired during updates since we want to verify reader-updater conflicts as opposed to updater-updater conflicts. All three of these are run concurrently on the same instance of RadixIPLookup. The race is illustrated with the help of a sequence diagram in Figure \ref{race_readerfigure}.\\
+
+A thread-safe implementation will have us expect that we always get X or the default route. A default route is returned if there was no prefix matching the route being looked up in the tree. But we see that the lookup sometimes returns Y, which is incorrect.
+
 \begin{figure}[tph]
 \fbox{
 \includegraphics[scale=0.6]{../images/diagrams/race_reader.pdf}
@@ -600,10 +635,59 @@ A and B are the addresses, X and Y are the values of the port. The least-common 
 \caption{Race condition with a concurrent reader and updater}
 \label{race_readerfigure}
 \end{figure}
-\\
-Locks are acquired during updates since we want to verify reader-updater conflicts as opposed to updater-updater conflicts. All three of these are run concurrently on the same instance of RadixIPLookup. The race is illustrated with the help of a sequence diagram in Figure \ref{race_readerfigure}.\\
 
-A thread-safe implementation will have us expect that we always get X or the default route. A default route is returned if there was no prefix matching the route being looked up in the tree. But we see that the lookup sometimes returns Y which is incorrect.
+\begin{table}[float=tph]
+\begin{center}
+\begin{tabular}{|p{2.2in}|p{2.2in}|}
+\hline
+\begin{lstlisting}[label=lst:uubashradixiplookup]
+bool
+BashRadixIPLookup::
+run_task(Task *) {
+  ...
+  for( i=0; i<10000, i++) {
+    add_route (A,X);
+    delete_route (A,X);
+  }
+ ...
+}
+\end{lstlisting}
+&
+\begin{lstlisting}
+bool
+PoundRadixIPLookup::
+run_task(Task *){
+  ...
+  for(i=0;i<10000,i++){
+    add_route (B, Y);
+    delete_route (B,Y);
+  }
+  ...
+}
+\end{lstlisting}\\
+\hline
+\end{tabular}
+\begin{tabular}{|p{4.55in}|}
+\begin{lstlisting}
+bool
+ReadRadixIPLookup::
+run_task(Task *){
+  ...
+  for(i=0;i<10000,i++){
+    lookup_route (A);
+  }
+  ...
+}
+\end{lstlisting}\\
+\hline
+\end{tabular}
+\end{center}
+\caption{The \texttt{run\_task()} methods of BashRadixIPLookup, PoundRadixIPLookup and ReadRadixIPLookup.}
+\label{tbl:ruverify}
+\end{table}
+
+
+\pagebreak
 \section{The Solution}
 \label{sec:solution}
 The race conditions described in the previous sections occur due to threads accessing shared data structures. RCU is known to be an efficient synchronization technique for read-heavy workloads. We compare the performance of RCU with a reader-writer lock. The reader-writer lock approach is also described in this section.

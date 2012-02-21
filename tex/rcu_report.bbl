@@ -95,10 +95,21 @@ Eddie Kohler, Robert Morris, Benjie Chen, John Jannotti, and M.~Frans Kaashoek.
 \newblock The click modular router.
 \newblock {\em ACM Trans. Comput. Syst.}, 18:263--297, August 2000.
 
+\bibitem{seqconsistency}
+Leslie Lamport.
+\newblock How to make a multiprocessor computer that correctly executes
+  multiprocess programs.
+\newblock {\em IEEE Transactions on Computers}, 28(9):690--691, September 1979.
+
 \bibitem{rcuusage}
 Paul~E. McKenney and Jonathan Walpole.
 \newblock Introducing technology into the linux kernel: a case study.
 \newblock {\em SIGOPS Oper. Syst. Rev.}, 42:4--17, July 2008.
+
+\bibitem{eventualconsistency}
+Werner Vogels.
+\newblock Eventually consistent.
+\newblock {\em Queue}, 6:14--19, October 2008.
 
 \bibitem{runtimepacketprocessing}
 Qiang Wu and Tilman Wolf.
