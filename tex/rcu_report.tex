@@ -1,7 +1,7 @@
 \documentclass[a4paper,marginparwidth=50pt,marginparsep=10pt]{article}
 \usepackage[pdftex]{graphicx}
 \usepackage{fancyvrb}
-\usepackage{listings}
+\usepackage[procnames]{listings}
 \usepackage{epstopdf}
 \usepackage{courier}
 \usepackage{hyperref}
@@ -11,14 +11,17 @@
 \usepackage{calc}
 \usepackage{algorithmic}
 \usepackage{algorithm}
+\usepackage{color}
 \usepackage[ragged]{sidecap}
 %margins
 % Margin width
 \newlength{\marginwidth}
 \setlength{\marginwidth}{\marginparwidth}
 \addtolength{\marginwidth}{\marginparsep}
-
+\definecolor{gray}{gray}{0.5}
+\definecolor{darkgray}{gray}{0.3}
 \lstset {
+language=C++,
 basicstyle=\footnotesize\ttfamily,
 showstringspaces=false,
 numbers=left,
@@ -29,7 +32,12 @@ xleftmargin=17pt,
 framexleftmargin=17pt,
 framexrightmargin=5pt,
 framexbottommargin=4pt,
-stringstyle=\color{while}\ttfamily,
+stringstyle=\color{gray}\ttfamily,
+commentstyle=\color{gray}\slshape,
+keywordstyle=\color{black}\bfseries,
+procnamekeys={RadixIPLookup,Master,ReclaimHook},
+indexprocnames=true,
+procnamestyle=\color{darkgray}\bfseries,
 numberstyle=\tiny
 }
 
@@ -77,7 +85,7 @@ The rest of the document is organized as follows. Section \ref{sec:background} g
 \section{Related Work}
 With over 2000 reported uses of the RCU API \cite{rcuusage} in the Linux kernel in recent years, RCU is widely used in system software. It does not seem to be as popular in userlevel applications. Desnoyers et al. \cite{urcu} attribute this to multiple factors, such as the constrained design imposed by previous userlevel RCU algorithms, heavy read-side overhead, etc. They propose and discuss several approaches to implementing RCU in applications. One such approach is the quiescent state based reclamation (QSBR) approach. A thread reaches a quiescent state when it releases references to mutable data structures. When each thread has reached a quiescent state, QSBR reclaims stale references. It has near zero read side overhead but has constraints on application design: when the thread lies in a quiescent state, it is required to call \verb+rcu_quiescent_state()+. Another approach is what is referred to as \emph{General Purpose RCU}. In contrast with QSBR, this approach does not impose any constraints on application design; it can even be used in implementing library functions and API. It has the highest read-side overhead as compared to the other RCU approaches. The overhead is due to memory barriers which are inserted before and after the read side critical sections. The third approach is the \emph{Signal-Based RCU}. It avoids the high read-side overhead in the general-purpose approach by sending POSIX signal from the update side critical sections.
 
-Click has natural quiescent states which allow us to implement QSBR. Each thread periodically calls a function which checks for a grace period in order to begin reclaiming stale data. Section \ref{rcuschedloop} describes this mechanism in detail.\\
+Click has natural quiescent states which allow us to implement QSBR. Each thread periodically calls a function which checks for a grace period in order to begin reclaiming stale data. Section \ref{sec:rcuschedloop} describes this mechanism in detail.\\
 
 Hart et al. \cite{hart} compare several different memory reclamation schemes for RCU. Amongst these QSBR is again the scheme with the best performance, but is constrained by the requirement that the application has some natural quiescent states. The authors mention that the QSBR approach can be implemented through a fuzzy barrier. ``A barrier protects access to some code which no thread should execute before all other threads finish some prior stage of computation.'' A fuzzy barrier in contrast with a (non-fuzzy) barrier is non-blocking. If a thread cannot get past a fuzzy barrier, it skips the protected code and resumes execution. A (non-fuzzy) barrier would have the thread block until all threads have reached it. We describe how we implement the fuzzy barrier in Section \ref{sec:rcu}. The epoch based reclamation (EBR) scheme is application independent, but has higher overhead than QSBR. EBR is similar to the general purpose RCU approach described by Hart et. al. \cite{urcu}, in the sense that it is application agnostic. EBR has some reader side overhead where QSBR has none. EBR uses epochs to implement a fuzzy barrier. Each thread updates local epoch numbers which are checked against a global epoch number to detect quiescent states. Although our approach is modeled on QSBR, it is similar to EBR for several reasons. Firstly, we use epochs to implement a fuzzy barrier. Secondly updaters and \emph{readers} update a local epoch number as opposed to a pure QSBR approach where readers have zero overhead.\\
 
@@ -727,7 +735,7 @@ Figure \ref{fig:rcutimer} explains the working of the timer mechanism. Our imple
 
 \pagebreak
 \subsubsection{RCU Using The Click Scheduling Loop}
-\label{rcuschedloop}
+\label{sec:rcuschedloop}
 
 The timer expiry as a quiescent state described in Section \ref{sec:rcutimers} works well for RadixIPLookup since each lookup completes within a fixed time interval. For other Elements in Click, it may not be possible to determine the duration of a read-side critical section. We wish to detect quiescent states for all other userlevel Elements without having to know how long it takes for a reader task to complete. The scheme described here does not require that the reader task be of a specific duration. It does require that the reader task eventually terminate. The approach involves using the scheduling loop in Click to detect quiescent states. 
 
@@ -821,7 +829,7 @@ RCU allows concurrent readers to proceed amidst other readers or a concurrent up
 \item The Element should declare a ReclaimHook variable as a member of the class (for example, declare \texttt{ReclaimHook \_reclaimhook}).
 \item The Element should provide a \texttt{reclaim()} method as a member function or as a member of a subclass. The instance of the class containing the \texttt{reclaim()} function is the \emph{Reclaimable} object. \\ This function should reclaim stale data from the \texttt{reclaim\_later} list when called, using the mechanism described in Section \ref{sec:rcuschedloop}.
 \item The ReclaimHook should be initialized using \texttt{initialize(this)} before any reclamations are scheduled.
-\item Reclamations can be scheduled or unscheduled using the \texttt{schedule()} or \texttt{unschedule()} methods respectively.
+\item Reclamations can be scheduled or unscheduled using the \texttt{schedule()} or \\\texttt{unschedule()} methods respectively.
 \item Update-side critical sections must be protected using locks (unless a single updater thread is used).
 \end{enumerate}
  
@@ -838,12 +846,10 @@ class ReclaimHook:public Hook {
     inline void unschedule() { _is_scheduled = false; }
     inline void fire();
 
-    private:
+  private:
     Element *_owner;
     void * _thunk;
-    bool _is_scheduled;
-    
-
+    bool _is_scheduled;    
 };
 
 inline
@@ -860,7 +866,6 @@ ReclaimHook::initialize(Element *owner) {
     _owner = owner;
 }
 
-
 void
 ReclaimHook::fire() {
   if(_thunk) {
@@ -870,12 +875,60 @@ ReclaimHook::fire() {
 \end{lstlisting}
 
 \paragraph{API Usage in the Driver Loop}
-\pagebreak
+An Element using our API registers a callback function (\texttt{reclaim()}), which reclaims stale data belonging to that Element, as described previously. When a grace period is reached, it is safe to reclaim stale data accumulated two epochs prior to the current epoch, as discussed in Section \ref{sec:rcuschedloop}. When we reach a grace period, we invoke all registered callbacks using the \texttt{ReclaimHook::fire()} method. This is illustrated in Listing \ref{lst:graceperiod}. We can see that after a grace period, all elements which had scheduled reclamations have had a chance to reclaim stale data.  
+\begin{lstlisting}[float=pht, caption=Invoking callbacks for reclamations using the API.,label=lst:graceperiod, lineskip={-0.4pt}]
+void 
+Master::try_reclaim()
+{
+    // multiple threads call try_reclaim at the same time,
+    // but only one should excecute it.
+    bool got_lock = _try_reclaim_lock.attempt();
+    if(got_lock == false)
+	return;
+
+    bool reclaim = true;
+    RouterThread *t;
+    // The condition for a grace period is that for all threads:
+    // either the thread has witnessed a quiescent state
+    // ( i.e.  _thread_epoch_counts[thread_id] == 0 )
+    // or the thread is blocked.
+    int n = nthreads();
+    for(int i = 0; i < n ; i++) {
+	t = thread(i);
+	int state = t->thread_state();
+	if(_thread_epoch_counts[i] ==1 && 
+	   (state == RouterThread::S_RUNTIMER ||
+	    state == RouterThread::S_RUNSELECT ||
+	    state == RouterThread::S_RUNSIGNAL ||
+	    state == RouterThread::S_RUNSELECT ||
+	    state == RouterThread::S_RUNTASK)) {
+	    reclaim = false;
+	    break;
+	}
+    }
+
+    if(reclaim){
+	// reclaim memory
+	for(int i = 0; i < _reclaim_hooks.size(); i++) {
+	    if(_reclaim_hooks[i]->scheduled())
+		_reclaim_hooks[i]->fire();
+	}
+	// reset the _thread_epoch_count variables for each thread.
+	asm volatile ("" : : : "memory");
+	for(int i = 0; i < n; i++) {
+	    t = thread(i);
+	    _thread_epoch_counts[i]= 1;
+	}
+    }
+    _try_reclaim_lock.release();
+}
+\end{lstlisting}
+
 \subsection{Reader-Writer Lock}
 We have compared the performance of the RCU approach with that of a reader-writer lock. We chose a reader-writer lock, since the typical workload for a router is read intensive with few updates. In the absence of an updater, all readers can access shared data without contending for the lock.\\
 
 Our approach involves locking around the entire read-side or update-side critical section. This is illustrated in the \verb+add_route()+ function shown in Listing \ref{addroutereaderwriterlocklisting}, where a lock is acquired around the entire update-side critical section. Similar locking is used around the read-side critical section in \verb+lookup_route()+ (Listing \ref{lookuproutereaderwriterlocklisting}).
-\begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting,float=tph]
+\begin{lstlisting}[caption = Reader-writer lock usage in lookup\_route(), label=lookuproutereaderwriterlocklisting,float=hpt]
 int RadixIPLookup107::lookup_route(IPAddress addr, 
                                    IPAddress &gw) const
 {  
@@ -887,7 +940,7 @@ int RadixIPLookup107::lookup_route(IPAddress addr,
     return port;
 }
 \end{lstlisting}
-\begin{lstlisting}[caption = Reader-writer lock usage in add\_route(), label=addroutereaderwriterlocklisting,float=tph]
+\begin{lstlisting}[caption = Reader-writer lock usage in add\_route(), label=addroutereaderwriterlocklisting,float=hpt]
 int
 RadixIPLookup107::add_route(const IPRoute &route, 
                             bool set, 
@@ -1194,10 +1247,9 @@ his continued guidance, support and ideas. His eye for detail, grace and relevan
 privilege. This project was a learning curve for me, and Professor Eddie has supported me
 through his feedback and insight all along the way.
 
-Rohit Kumar contributed equally to this project. This work reflects his energy and inputs. Rohit worked in an organized manner, and has a knack for automation and elegance.
-I've learned a lot from him.
+Rohit Kumar contributed equally to this project. This work reflects his energy and inputs. I've learned a lot from his organized way of working, knack for automation, eye for elegance and brutally honest feedback.
 
-I am thankful to my parents and sister for their unconditional loving support.
+I am indebted to my parents and sister for their unconditional loving support.
 
 \bibliography{rcu_report}
 \bibliographystyle{plain}
