@@ -53,17 +53,15 @@ numberstyle=\tiny
 \hyphenation{free-list Ra-dix-IP-Look-up Pound-Rad-ix-IP-Look-up Bash-Rad-ix-IP-Look-up Read-Rad-ix-IP-Look-up Router-thread}
 \begin{document}
 
-\input{title}
+\include{title}
+\include{abstract}
+\include{acknowledgements}
 \tableofcontents
+\pagebreak
 \listoffigures
 \listoftables
 
 \pagebreak
-\section{Abstract}
-High performance routing lookups are critically important for packet forwarding. Routers must perform a lookup for every arriving packet. As line rates exceed 40Gbps \cite{attlinkrate}, routers are required to perform 125 million lookups a second (assuming a minimum packet size of 40 bytes). Additionally, routers are required to perform sophisticated packet processing providing services which support security, video and mobility \cite{routebricks}. Software routers are more flexible and extensible for such processing when compared to hardware routers. However, software routers are an order of magnitude slower than their hardware counterparts \cite{cansoftwareroutersscale}. With multi-core systems becoming more popular and more prevalent, leveraging them is key to improving performance in software routers. However, obtaining a simultaneously correct and fast thread-safe solution remains challenging. For example, conventional locking allows only a single thread to access a shared data structure at a time. Although this solution is easily correct, it does not take complete advantage of the available parallelism, and is evidently slower. Reader-writer locks, which allow readers to proceed concurrently with other readers, but not with updaters are faster in comparison, yet slower than non-locking sequential performance.\\
-
-We have described an approach for providing thread-safety using \emph{Read-Copy Update} (RCU) \cite{readcopyupdate}. RCU is a synchronization technique which scales efficiently on read intensive workloads. It has very low read side overhead, allowing readers to proceed concurrently with other readers and updaters. A typical router workload is read intensive, with 0-5\% updates. For such a workload, using a commodity 8 core machine, we have verified that the performance of the RCU approach is near non-locking sequential performance, and is up to 27 times faster than a reader-writer lock.
-
 \section{Introduction}
 The ever-increasing volume of network traffic over the internet demands highly efficient routing lookups. Apart from performing route lookups, routers are also required to support a variety of other functions such as encryption, classification, inspection and filtering \cite{routebricks}. Software routers are more flexible and easily extensible for integrating and adding such functionality when compared to hardware routers. However software routers struggle to comfortably scale beyond 10 Gbps \cite{routebricks}, being far outpaced by line rates which exceed 40 Gbps \cite{attlinkrate}.\\
 
@@ -1233,16 +1231,6 @@ this mechanism does indeed have a very low reader side overhead (within 1.1 time
 We have experimented with the RadixIPLookup Element in Click. However, it would be useful to implement a RCU based synchronization for other Elements such as DirectIPLookup or RangeIPLookup.\\ 
 
 Our approach uses RCU for the vector in RadixIPLookup, however a coarse grained lock is acquired for updates to the radix tree. The size of the radix tree depends on the size of the routing table, which is typically very large. Thus implementing RCU based synchronization for the radix tree would be very useful.
-\section{Acknowledgements}
-I am tremendously grateful to my advisor, Professor Eddie Kohler for
-his continued guidance, support and ideas. His eye for detail, grace and relevance made working with him a
-privilege. This project was a learning curve for me, and Professor Eddie has supported me
-through his feedback and insight all along the way.
-
-Rohit Kumar contributed equally to this project. This work reflects his energy and inputs. I've learned a lot from his organized way of working, knack for automation, eye for elegance and brutally honest feedback.
-
-I am indebted to my parents and sister for their unconditional loving support.
-
 \bibliography{rcu_report}
 \bibliographystyle{plain}
 \end{document}
