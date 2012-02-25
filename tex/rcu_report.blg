@@ -7,45 +7,45 @@ The style file: plain.bst
 Database file #1: rcu_report.bib
 Warning--to sort, need author or key in routeviews
 Warning--empty booktitle in fastrtable1
-You've used 20 entries,
+You've used 21 entries,
             2118 wiz_defined-function locations,
-            613 strings with 7804 characters,
-and the built_in function-call counts, 7389 in all, are:
-= -- 722
-> -- 389
+            622 strings with 8024 characters,
+and the built_in function-call counts, 7675 in all, are:
+= -- 749
+> -- 407
 < -- 6
-+ -- 156
-- -- 133
-* -- 506
-:= -- 1194
-add.period$ -- 61
-call.type$ -- 20
-change.case$ -- 125
++ -- 163
+- -- 139
+* -- 523
+:= -- 1243
+add.period$ -- 65
+call.type$ -- 21
+change.case$ -- 131
 chr.to.int$ -- 0
-cite$ -- 22
-duplicate$ -- 257
-empty$ -- 564
-format.name$ -- 133
-if$ -- 1572
+cite$ -- 23
+duplicate$ -- 264
+empty$ -- 586
+format.name$ -- 139
+if$ -- 1632
 int.to.chr$ -- 0
-int.to.str$ -- 20
+int.to.str$ -- 21
 missing$ -- 13
-newline$ -- 99
-num.names$ -- 40
-pop$ -- 148
+newline$ -- 105
+num.names$ -- 42
+pop$ -- 158
 preamble$ -- 1
-purify$ -- 105
+purify$ -- 110
 quote$ -- 0
-skip$ -- 217
+skip$ -- 223
 stack$ -- 0
-substring$ -- 425
-swap$ -- 69
+substring$ -- 430
+swap$ -- 70
 text.length$ -- 6
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 80
+type$ -- 84
 warning$ -- 2
-while$ -- 68
-width$ -- 22
-write$ -- 214
+while$ -- 70
+width$ -- 23
+write$ -- 226
 (There were 2 warnings)

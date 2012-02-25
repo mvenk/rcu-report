@@ -106,6 +106,12 @@ Paul~E. McKenney and Jonathan Walpole.
 \newblock Introducing technology into the linux kernel: a case study.
 \newblock {\em SIGOPS Oper. Syst. Rev.}, 42:4--17, July 2008.
 
+\bibitem{rfc2461}
+T.~Narten, E.~Nordmark, and W.~Simpson.
+\newblock {Neighbor Discovery for IP Version 6 (IPv6)}.
+\newblock RFC 2461 (Draft Standard), December 1998.
+\newblock Obsoleted by RFC 4861, updated by RFC 4311.
+
 \bibitem{eventualconsistency}
 Werner Vogels.
 \newblock Eventually consistent.

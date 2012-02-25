@@ -1,5 +1,6 @@
-\documentclass[a4paper,marginparwidth=50pt,marginparsep=10pt]{article}
+\documentclass[a4paper]{article}
 \usepackage[pdftex]{graphicx}
+\usepackage{amssymb}
 \usepackage{fancyvrb}
 \usepackage[procnames]{listings}
 \usepackage{epstopdf}
@@ -12,7 +13,6 @@
 \usepackage{algorithmic}
 \usepackage{algorithm}
 \usepackage{color}
-\usepackage[ragged]{sidecap}
 %margins
 % Margin width
 \newlength{\marginwidth}
@@ -48,7 +48,6 @@ numberstyle=\tiny
  urlcolor=blue,
 }
 \DefineVerbatimEnvironment{code}{Verbatim}{fontsize=\normalsize}{\fontfamily{pcr}}
-\DefineVerbatimEnvironment{example}{Verbatim}{fontsize=\small}
 \frenchspacing
 \hyphenation{free-list Ra-dix-IP-Look-up Pound-Rad-ix-IP-Look-up Bash-Rad-ix-IP-Look-up Read-Rad-ix-IP-Look-up Router-thread}
 \begin{document}
@@ -56,10 +55,8 @@ numberstyle=\tiny
 \include{title}
 \include{abstract}
 \include{acknowledgements}
+
 \tableofcontents
-\pagebreak
-\listoffigures
-\listoftables
 
 \pagebreak
 \section{Introduction}
@@ -119,7 +116,7 @@ class Radix {
 \end{lstlisting}
 The functions \verb+add_route()+ and \verb+delete_route()+ are used to add and delete routes into the routing table.
 \paragraph{Lookups}
-RadixIPLookup uses a longest prefix match algorithm, matching a candidate route with the highest subnet mask. The node at the topmost level stores keys which need to match up to an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a $12$ bit long prefix, and so on. The last level stores keys which can match up to a $32$ bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists, we repeat the process, trying to obtain the longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
+RadixIPLookup uses a longest prefix match algorithm \cite{rfc2461}, matching a candidate route with the highest subnet mask. The node at the topmost level stores keys which need to match up to an 8 bit long prefix. The nodes in the next level store keys for routes which need to match up to a $12$ bit long prefix, and so on. The last level stores keys which can match up to a $32$ bit long prefix. Listing \ref{lookup} shows the code for the lookup. Given an IP address \emph{addr} which we need to lookup, we calculate the child pointer of the radix node which we need to follow using the \emph{bitshift} at that level. If the key for that child exists, we repeat the process, trying to obtain the longest prefix match. If it does not exist, we have found the longest prefix match for that node, so we return the key value. This key indexes into a vector which will return the gateway and port for the address.
 \begin{lstlisting}[caption = The lookup function, label=lookup]
   static inline int lookup(const Radix *r, int cur, 
                            uint32_t addr) {
@@ -812,9 +809,9 @@ We observe that our approach is similar to the \emph{fuzzy barrier} approach des
 RCU allows concurrent readers to proceed amidst other readers or a concurrent updater. Concurrent updaters require some form of synchronization. We use locks around update-side critical sections to synchronize concurrent updaters.
 
 \subsubsection{The RCU API for Userlevel Click Elements}
- We describe the API for userlevel Elements, which can be used by an Element to provide RCU synchronization. This section describes how an Element can use the API to provide RCU synchronization as well as how the API interfaces with the driver loop in Click.
+ We describe the API for userlevel Elements, which can be used by an Element to provide RCU synchronization. This section describes how an Element can use the API to provide RCU synchronization, as well as how the API interfaces with the driver loop in Click.
 \paragraph{Requirements for Userlevel Elements}
- We have provided a class called ReclaimHook displayed in Listing \ref{lst:reclaimhook}. A userlevel Element which seeks to use RCU synchronization using our API should follow the procedure outlined below:
+ The ReclaimHook class (Listing \ref{lst:reclaimhook}) has been added to facilitate RCU synchronization for userlevel Elements. The framework identifies \emph{when} it is safe to reclaim. It is the responsibility of the userlevel Element to identify mutable data structures, and provide callbacks which correctly reclaim memory. A userlevel Element which seeks to use RCU synchronization using our framework is required to do the following:
 \begin{enumerate}
 \item The Element should declare a ReclaimHook variable as a member of the class (for example, declare \texttt{ReclaimHook \_reclaimhook}).
 \item The Element should provide a \texttt{reclaim()} method as a member function or as a member of a subclass. The instance of the class containing the \texttt{reclaim()} function is the \emph{Reclaimable} object. \\ This function should reclaim stale data from the \texttt{reclaim\_later} list when called, using the mechanism described in Section \ref{sec:rcuschedloop}.
@@ -990,7 +987,7 @@ model this we consider pure reader workloads and workloads which are
 read intensive with a very low fraction of writes.\\
 
 We used a realistic routing table derived from the routeviews.org
-database\cite{routeviews}. This table consists of 167,000 routes. We call this table
+database \cite{routeviews}. This table consists of 167,000 routes. We call this table
 the \emph{167k table}. The input set was generated randomly using the
 167k router configuration. A reader task consisted of performing
 lookups for 100,000 inputs from this input set. An updater task
@@ -1000,7 +997,7 @@ of the test.\\
 
 The benchmarks involving only readers were run on the RCU version,
 the reader-writer lock version and the vanilla version with no
-locks. When there are updaters involved in the workload the benchmark
+locks. When there were updaters involved in the workload, the benchmark
 was run on the RCU version and the reader-writer lock version. We
 cannot run the workload with writers on the vanilla version since it
 is not thread safe.
@@ -1012,7 +1009,9 @@ is not thread safe.
 
 \begin{table}[tph]
 \begin{center}
+\scalebox{0.9} {
 \input{macro_vr_0w.tex}
+}
 \end{center}
 \caption{Performance comparison over a workload with increasing number of readers using the 167k routing table. The first three columns show time in seconds.}
 \label{tbl:macro_vr_0w}
@@ -1039,14 +1038,14 @@ linearly and is up to $22$ times slower than the version without
 locks.
 
 These results validate our claim that RCU is wait-free and lock-free
-for readers. In the RCU version readers do not create any
-synchronization overhead. Readers in the reader-writer lock version
-update a shared lock variable before they access the routing
+for readers. In the RCU version, readers do not create any
+synchronization overhead. However, readers in the reader-writer lock version
+access and update a shared lock variable before they access the routing
 table. The state of the shared variable needs to be updated through
 all cores. As the number of threads increases, the contention causes
 cache line bouncing and increased usage of the processor bus
 bandwidth. For the reader-writer lock, the number of lock acquisition attempts to enter
-the read side critical section is shown in Figure \ref{img:profile_rwl_locks_vr_0w}. The graph shows an increasing number of attempts for the lock with an increase in the number of threads. We can therefore attribute the  linear increase in time as the number of readers increase to the lock contention. 
+the read side critical section is shown in Figure \ref{img:profile_rwl_locks_vr_0w}. The graph shows an increasing number of lock acquisition attempts with an increase in the number of threads. We can therefore attribute the  linear increase in time to lock contention. 
 
 \subsubsection{Read Intensive Workload With One Writer}
 \begin{table}[tph]
@@ -1085,9 +1084,9 @@ workload consisting of 7 readers and 1 writer. Figure \ref{img:profile_rwl_locks
 outperforms the reader-writer lock for a read intensive workload with some writers.
 
 \subsubsection{Write Intensive Workloads}
-We have seen that RCU outperforms the Reader-Writer lock for reader heavy workloads. For completeness, we look at some workloads which are not common for a router: writer heavy workloads. The performance of a workload with zero readers and increasing number of writers is shown in  Figure \ref{img:macro_0r_vw} and Table \ref{tbl:macro_0r_vw}. Here, we see that the Reader-Writer Lock outperforms RCU by a factor of 1.46. We attribute this to the increased memory footprint and increased overhead in management of the reclaim lists. **Justify.
+We have seen that RCU outperforms the Reader-Writer lock for reader heavy workloads. For completeness, we look at some workloads which are not common for a router: writer heavy workloads. The performance of a workload with zero readers and increasing number of writers is shown in  Figure \ref{img:macro_01r_vw} and Table \ref{tbl:macro_0r_vw}. Here, we see that the Reader-Writer Lock outperforms RCU by a factor of 1.46. We attribute this to the increased memory footprint and increased overhead in management of the reclaim lists.
 
-The performance of a workload consisting of one reader and increasing number of writers is shown in  Figure \ref{img:macro_1r_vw} and Table \ref{tbl:macro_1r_vw}. Although RCU does not scale, we see that it performs better than the Reader-Writer Lock.
+The performance of a workload consisting of one reader and increasing number of writers is shown in  Figure \ref{img:macro_01r_vw} and Table \ref{tbl:macro_1r_vw}. Although RCU does not scale, we see that it performs better than the Reader-Writer Lock.
 
 It is clear that RCU is not as fabulous for write intensive workloads. These workloads are very uncommon for a typical router and we can accept this behavior.
  
@@ -1098,15 +1097,6 @@ It is clear that RCU is not as fabulous for write intensive workloads. These wor
 \caption{Performance comparison of increasing number of writers and zero readers using the 167k routing table.}
 \label{tbl:macro_0r_vw}
 \end{table}
-
-
-\begin{figure}[tph]
-\centering
-\includegraphics[scale = 0.7]{../images/graphs/macro_0r_vw}
-\caption{Performance of increasing number of writers and zero readers with the 167k routing table.}
-\label{img:macro_0r_vw}
-\end{figure}
-
 
 \begin{table}[tph]
 \begin{center}
@@ -1119,10 +1109,13 @@ It is clear that RCU is not as fabulous for write intensive workloads. These wor
 
 \begin{figure}[tph]
 \centering
-\includegraphics[scale = 0.7]{../images/graphs/macro_1r_vw}
-\caption{Performance of increasing number of writers and one reader with the 167k routing table.}
-\label{img:macro_1r_vw}
+\includegraphics[scale = 0.45]{../images/graphs/macro_0r_vw}
+\includegraphics[scale = 0.45]{../images/graphs/macro_1r_vw}
+\caption{Write intensive workloads: Performance of increasing number of writers with no readers (left), and increasing number of writers with one reader (right). Both measurements used the 167k routing table.}
+\label{img:macro_01r_vw}
 \end{figure}
+
+\pagebreak
 
 \subsection{Micro-benchmarks}
 \label{sec:microbenchmarks}
@@ -1138,7 +1131,9 @@ The Reader-Writer lock spends time acquiring a lock on reads while RCU does not 
 
 \begin{table}
 \begin{center}
+\scalebox{0.9} {
 \input{micro_vr_0w.tex}
+}
 \end{center}
 \label{tbl:micro_vr_0w}
 \caption{Performance comparison over a workload with increasing number of readers and zero writers.}
@@ -1172,7 +1167,7 @@ RCU scales over an increase in the number of threads, however the reader-writer 
 \end{figure}
 
 \paragraph{Write Intensive workloads}
-We now compare the performance of RCU with the reader-writer lock for a write intensive workload. The performance of a workload with one reader and increasing number of writers is shown in Table \ref{tbl:micro_1r_vw} and Figure \ref{img:micro_1r_vw}. The performance of a workload with zero readers and increasing number of writers is shown in Table \ref{tbl:micro_0r_vw} and Figure \ref{img:micro_0r_vw}. In both cases, the reader-writer lock performs better than RCU. We attribute this to additional overhead caused due to lock contention to free stale data in quiescent states. When there are more writers, there is more stale data. Since these benchmarks target a very small set of routes, the reclamation also has contention for the same memory locations.
+We now compare the performance of RCU with the reader-writer lock for a write intensive workload. The performance of a workload with one reader and increasing number of writers is shown in Table \ref{tbl:micro_1r_vw} and Figure \ref{img:micro_01r_vw}. The performance of a workload with zero readers and increasing number of writers is shown in Table \ref{tbl:micro_0r_vw} and Figure \ref{img:micro_01r_vw}. In both cases, the reader-writer lock performs better than RCU. We attribute this to additional overhead caused due to lock contention to free stale data in quiescent states. When there are more writers, there is more stale data. Since these benchmarks target a very small set of routes, the reclamation also has contention for the same memory locations.
 
 \begin{table}[tph]
 \begin{center}
@@ -1184,9 +1179,10 @@ We now compare the performance of RCU with the reader-writer lock for a write in
 
 \begin{figure}[tph]
 \centering
-\includegraphics[scale = 0.7]{../images/graphs/micro_0r_vw}
-\caption{Performance comparison of increasing number of writers with zero readers.}
-\label{img:micro_0r_vw}
+\includegraphics[scale = 0.45]{../images/graphs/micro_0r_vw}
+\includegraphics[scale = 0.45]{../images/graphs/micro_1r_vw}
+\caption{Write Intensive workloads: Performance comparison of increasing number of writers with zero readers (left), and one reader (right).}
+\label{img:micro_01r_vw}
 \end{figure}
 
 \begin{table}[tph]
@@ -1196,13 +1192,6 @@ We now compare the performance of RCU with the reader-writer lock for a write in
 \label{tbl:micro_1r_vw}
 \caption{Performance comparison of increasing number of writers with one reader.}
 \end{table}
-
-\begin{figure}[tph]
-\centering
-\includegraphics[scale = 0.7]{../images/graphs/micro_1r_vw}
-\caption{Performance comparison of increasing number of writers with one reader.}
-\label{img:micro_1r_vw}
-\end{figure}
 
 \pagebreak
 \section{Conclusion}
@@ -1216,8 +1205,7 @@ identify quiescent states in a way which could be applied to all
 Elements. 
 
 We have built an RCU framework for userlevel Click invlolving a
-mechanism to detect quiescent states and an API which can be used by
-a userlevel Element in Click.
+mechanism to detect quiescent states and an API which can be used by userlevel Click Elements.
 
 We have verified through our benchmarks that
 this mechanism does indeed have a very low reader side overhead (within 1.1 times non-locking performance). The RCU approach is also up to 27 times faster than a reader-writer lock on read intensive workloads.
