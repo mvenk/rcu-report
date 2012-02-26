@@ -1219,6 +1219,27 @@ this mechanism does indeed have a very low reader side overhead (within 1.1 time
 We have experimented with the RadixIPLookup Element in Click. However, it would be useful to implement a RCU based synchronization for other Elements such as DirectIPLookup or RangeIPLookup.\\ 
 
 Our approach uses RCU for the vector in RadixIPLookup, however a coarse grained lock is acquired for updates to the radix tree. The size of the radix tree depends on the size of the routing table, which is typically very large. Thus implementing RCU based synchronization for the radix tree would be very useful.
+
+\appendix
+\section{Source Code}
+\label{sec:source}
+\subsection{Getting the source code}
+The source code is available in the \emph{rcu\_local\_epoch} branch of the repository, \\\texttt{https://github.com/mvenk/click.git}.
+The microbenchmarks and macrobenchmarks can be found in the \emph{race/microbenchmarks} and \emph{race/macrobenchmarks} directories respectively.
+\subsection{Running Benchmarks}
+In order to run the benchmarks in multi-threaded mode, configure and install click like so:
+\begin{verbatim}
+$cd click_dir
+$./configure --enable-user-multithread --enable-multithread=8
+$ make -j 8
+\end{verbatim}
+Note that we configure with \emph{8}, since our experiments were run on an 8 core machine.
+The Makefile in the microbenchmarks and macrobenchmarks directories contain a brief description of the tests. To run a macrobenchmark with varying number of readers and one writer, run:
+\begin{verbatim}
+$cd race/macrobenchmarks
+$make rcu_vr_0w
+\end{verbatim}
+In order to compare against the reader-writer lock version or the non-locking version, run the same tests in the \emph{rcu\_master\_tests}. All tests are configured for a machine with 8 cores, files for N number of cores can be generated with the \emph{gen\_benchmarks.sh} script.
 \bibliography{rcu_report}
 \bibliographystyle{plain}
 \end{document}
