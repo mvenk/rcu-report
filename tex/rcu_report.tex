@@ -952,7 +952,7 @@ Updaters acquire a lock, so there is some performance penalty in the presence of
 \section{Performance Evaluation}
 \label{sec:perfeval}
 \subsection{Experimental Setup}
-We analyzed the performance of our solutions on a Mac machine with 8 cores whose configuration is shown in Table \ref{tbl:machinemac}.
+We analyzed the performance of our solutions on the machine whose configuration is shown in Table \ref{tbl:machinemac}.
 We used the CPU time reported by system utility \emph{/usr/bin/time} to measure performance.
 
 Macrobenchmarks in Section \ref{sec:macrobenchmarks} evaluate the performance of RCU over a routing table consisting of roughly 167,000 routes. Microbenchmarks in Section \ref{sec:microbenchmarks} evaluate the performance of RCU with a over a small range of IP addresses.
@@ -1195,10 +1195,6 @@ We now compare the performance of RCU with the reader-writer lock for a write in
 
 \pagebreak
 \section{Conclusion}
-Lookup performance in a software router such as Click is crucially
-important. Leveraging multicore processors which are available in almost all commodity hardware
-today is a feasible way to improve performance. This document has outlined an efficient way to achieve a fast and safe multicore solution.
-
 
 The primary challenges in implementing RCU for Click were to
 identify quiescent states in a way which could be applied to all
@@ -1207,23 +1203,28 @@ Elements.
 We have built an RCU framework for userlevel Click invlolving a
 mechanism to detect quiescent states and an API which can be used by userlevel Click Elements.
 
-We have verified through our benchmarks that
-this mechanism does indeed have a very low reader side overhead (within 1.1 times non-locking performance). The RCU approach is also up to 27 times faster than a reader-writer lock on read intensive workloads.
+We have verified through our benchmarks that this mechanism does
+indeed have a very low reader side overhead (within 1.1 times
+non-locking performance). The RCU approach is also up to 27 times
+faster than a reader-writer lock on read intensive workloads.
 
+RCU's performance is not better than that of a reader-wrtier lock for
+write-intensive workloads. We find this behaviour acceptable since our
+workload is IP lookups, which is read-intensive. 
 \section{Future Work}
 
 %\begin{enumerate}
 %\item Implement RCU for RadixIPLookup if Radix nodes are deleted when a route is removed.
 %\item Implement RCU for the Radix Tree: Currently, RCU has been only used on the vector. A coarse grained lock is acquired around updates to the Radix Tree.
 %\end{enumerate}
-We have experimented with the RadixIPLookup Element in Click. However, it would be useful to implement a RCU based synchronization for other Elements such as DirectIPLookup or RangeIPLookup.\\ 
+We have experimented with the RadixIPLookup Element in Click. DirectIPLookup and RangeIPLookup are some of the other fast routing table Elements in Click. It would be useful to implement a RCU based synchronization these elements as well.\\ 
 
 Our approach uses RCU for the vector in RadixIPLookup, however a coarse grained lock is acquired for updates to the radix tree. The size of the radix tree depends on the size of the routing table, which is typically very large. Thus implementing RCU based synchronization for the radix tree would be very useful.
 
 \appendix
 \section{Source Code}
 \label{sec:source}
-\subsection{Getting the source code}
+\subsection{Getting the Source Code}
 The source code is available in the \emph{rcu\_local\_epoch} branch of the repository, \\\texttt{https://github.com/mvenk/click.git}.
 The microbenchmarks and macrobenchmarks can be found in the \emph{race/microbenchmarks} and \emph{race/macrobenchmarks} directories respectively.
 \subsection{Running Benchmarks}
@@ -1234,12 +1235,12 @@ $./configure --enable-user-multithread --enable-multithread=8
 $ make -j 8
 \end{verbatim}
 Note that we configure with \emph{8}, since our experiments were run on an 8 core machine.
-The Makefile in the microbenchmarks and macrobenchmarks directories contain a brief description of the tests. To run a macrobenchmark with varying number of readers and one writer, run:
+The Makefile in the microbenchmarks and macrobenchmarks directories contain a brief description of the tests. To run a macrobenchmark with varying number of readers and one writer, do the following:
 \begin{verbatim}
 $cd race/macrobenchmarks
 $make rcu_vr_0w
 \end{verbatim}
-In order to compare against the reader-writer lock version or the non-locking version, run the same tests in the \emph{rcu\_master\_tests}. All tests are configured for a machine with 8 cores, files for N number of cores can be generated with the \emph{gen\_benchmarks.sh} script.
+In order to compare against the reader-writer lock version or the non-locking version, run the same tests in the \emph{rcu\_master\_tests} branch. All tests are configured for a machine with 8 cores. In order to generate tests for N number of cores, use the \emph{gen\_benchmarks.sh} script provided in the \emph{race/macrobenchmarks} directory.
 \bibliography{rcu_report}
 \bibliographystyle{plain}
 \end{document}
