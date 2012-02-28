@@ -16,7 +16,7 @@ Katerina~J. Argyraki, Salman Baset, Byung-Gon Chun, Kevin~R. Fall, Gianluca
 
 \bibitem{attlinkrate}
 AT$\&$T".
-\newblock At$\&$t completes next-generation ip/mpls backbone network, world's
+\newblock At$\&$t completes next-generation {IP/MPLS} backbone network, world's
   largest deployment of 40-gigabit connectivity.
 \newblock
   \url{http://www.att.com/gen/press-room?cdvn=news&newsarticleid=26230&pid=480%
@@ -24,19 +24,20 @@ AT$\&$T".
 
 \bibitem{chenmorris}
 Benjie Chen and Robert Morris.
-\newblock Flexible control of parallelism in a multiprocessor pc router, 2001.
+\newblock Flexible control of parallelism in a multiprocessor {PC} router,
+  2001.
 
 \bibitem{fastrtable3}
 Tzi cker Chiueh and Prashant Pradhan.
-\newblock High-performance ip routing table lookup using cpu caching.
+\newblock High-performance {IP} routing table lookup using cpu caching.
 
 \bibitem{incrtablesize}
 L.~Zhang D.~Meyer and K.~Fall.
-\newblock Report from the iab workshop onrouting and addressing. rfc 4984,
-  2007.
+\newblock Report from the {IAB} workshop on {R}outing and {A}ddressing. {RFC}
+  4984, 2007.
 
 \bibitem{urcu}
-Mathieu Desnoyers, Paul~E. McKenney, Alan Stern, Michel~R. Dagenais, and
+Mathieu Desnoyers, Paul~E. Mc{K}enney, Alan Stern, Michel~R. Dagenais, and
   Jonathan Walpole.
 \newblock User-level implementations of read-copy update.
 \newblock {\em IEEE Transactions on Parallel and Distributed Systems},
@@ -64,12 +65,12 @@ Dinakar Guniguntala, Paul~E. Mckenney, Josh Triplett, and Jonathan Walpole.
 \newblock {\em IBM Systems Journal}, 47(2):221--236, 2008.
 
 \bibitem{fastrtable1}
-Pankaj Gupta, Steven Lin, and Nick Mckeown.
+Pankaj Gupta, Steven Lin, and Nick Mc{K}eown.
 \newblock Routing lookups in hardware at memory access speeds.
 \newblock pages 1240--1247, 1998.
 
 \bibitem{hart}
-Thomas~E. Hart, Paul~E. McKenney, Angela~Demke Brown, and Jonathan Walpole.
+Thomas~E. Hart, Paul~E. Mc{K}enney, Angela~Demke Brown, and Jonathan Walpole.
 \newblock Performance of memory reclamation for lockless synchronization.
 \newblock {\em J. Parallel Distrib. Comput.}, 67:1270--1285, December 2007.
 
@@ -82,17 +83,17 @@ Zhuo Huang, David Lin, Jih-Kwon Peir, Shigang Chen, and S.~M.~Iftekharul Alam.
 
 \bibitem{lookuptime}
 Eddie Kohler.
-\newblock Iproutetable element documentation.
+\newblock Ip{R}oute{T}able element documentation.
 \newblock \url{http://read.cs.ucla.edu/click/elements/iproutetable}.
 
 \bibitem{radixiplookup}
 Eddie Kohler.
-\newblock Radixiplookup documentation.
+\newblock Radix{IPL}ookup documentation.
 \newblock \url{http://read.cs.ucla.edu/click/elements/radixiplookup}.
 
 \bibitem{click}
 Eddie Kohler, Robert Morris, Benjie Chen, John Jannotti, and M.~Frans Kaashoek.
-\newblock The click modular router.
+\newblock The {C}lick modular router.
 \newblock {\em ACM Trans. Comput. Syst.}, 18:263--297, August 2000.
 
 \bibitem{seqconsistency}
@@ -102,8 +103,8 @@ Leslie Lamport.
 \newblock {\em IEEE Transactions on Computers}, 28(9):690--691, September 1979.
 
 \bibitem{rcuusage}
-Paul~E. McKenney and Jonathan Walpole.
-\newblock Introducing technology into the linux kernel: a case study.
+Paul~E. Mc{K}enney and Jonathan Walpole.
+\newblock Introducing technology into the {L}inux kernel: a case study.
 \newblock {\em SIGOPS Oper. Syst. Rev.}, 42:4--17, July 2008.
 
 \bibitem{rfc2461}
