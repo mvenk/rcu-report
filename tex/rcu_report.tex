@@ -792,10 +792,17 @@ For our scheme, we can provide the two RCU guarantees expressed in \cite{urcu}. 
 
 \begin{algorithmic}
 \STATE Any outstanding tasks in $GE=N-2$ have finished in epoch $GE=N$.
-\STATE Proof by case analysis:
-\STATE Case \textbf{Epoch} $\bf GE=0$: no tasks have run earlier and there have been no grace periods.
-\STATE Case \textbf{Epoch} $\bf GE=k$: Any outstanding tasks in $GE=k-2$ have finished and this epoch is a grace period for epoch $GE=k-2$. 
-\STATE The condition for GE to advance from epoch $k-1$ to epoch $k$ is that $\forall le_i, le_i=0$. At the start of epoch $k-1$, we know that $\forall le_i, le_i=1$.\\ $le_i$ is reset to 0 only after thread $t_i$ finishes some task. So $\forall \mbox{ threads }t_i\mbox{ }$ $\exists$ some task that was finished by the thread before the end of epoch $k-1$. 
+
+consider any task in Epoch N-2,
+The local epoch can either be 0 or 1.
+If le==1,
+The gloabl epoch can move to N-1 only after all lei have been reset to 0. lei is reset to zero only after the task finishes, 
+since the task finishes before GE N-1, it finishes before GE N.
+
+If le==0,
+The GE =N-2, le will be set at the begining of GE=N-1.
+le will be reset before GE moves to N.
+le will be reset only after this task finishes.
 \end{algorithmic}
 
 \item \emph{Publication Guarantee:} 
