@@ -13,6 +13,7 @@
 \usepackage{algorithmic}
 \usepackage{algorithm}
 \usepackage{color}
+\usepackage{booktabs}
 %margins
 % Margin width
 \newlength{\marginwidth}
@@ -131,6 +132,14 @@ RadixIPLookup uses a longest prefix match algorithm \cite{rfc2461}, matching a c
     return cur;
   }
 \end{lstlisting}
+
+\begin{table}[float=tph]
+\begin{tabular}{cc}
+\toprule%
+function name & purpose \\
+\toprule 
+\end{tabular}
+\end{table}
 \subsubsection{Route Vector for RadixIPLookup}
 The Click library files provide an implementation of a generic Vector. A brief explanation of the use of the vector class in RadixIPLookup is described here. The RadixIPLookup Element uses a vector of type IPRoute. IPRoute is a quintuple consisting of \emph{address}, \emph{mask}, \emph{gateway}, \emph{port} and \emph{extra}. \emph{Address} is the IP address of the route. \emph{Mask} is the subnet mask for that route. \emph{Gateway} is the destination to which a packet matching an address/mask will be routed to through the port. \emph{Extra} is used to recycle previously used but currently unused space within the vector. It is used to maintain a list of unused entries in the vector. We call this list the \emph{freelist}. If the index in the vector is currently in use extra is set to $-1$, otherwise it stores the index of the next entry in the freelist. If an entry in the vector is deleted, the index of that entry is added to a freelist. Table \ref{tbl:vector} represents a sample vector.
 
