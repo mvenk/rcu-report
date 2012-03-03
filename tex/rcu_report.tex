@@ -47,6 +47,7 @@ numberstyle=\tiny
  citecolor=black,
  urlcolor=blue,
 }
+\newcommand{\INDSTATE}[1][1]{\STATE\hspace{#1\algorithmicindent}}
 \DefineVerbatimEnvironment{code}{Verbatim}{fontsize=\normalsize}{\fontfamily{pcr}}
 \frenchspacing
 \hyphenation{free-list Ra-dix-IP-Look-up Pound-Rad-ix-IP-Look-up Bash-Rad-ix-IP-Look-up Read-Rad-ix-IP-Look-up Router-thread}
@@ -790,19 +791,23 @@ For our scheme, we can provide the two RCU guarantees expressed in \cite{urcu}. 
 \begin{enumerate}
 \item \emph{Grace-Period Guarantee:} This guarantee states that a given read-side critical section cannot extend beyond both sides of a grace period. We now show that we can maintain this as an invariant in our scheme.
 
-\begin{algorithmic}
-\STATE Any outstanding tasks in $GE=N-2$ have finished in epoch $GE=N$.
+\begin{algorithmic}[float=tph]
+\STATE Any outstanding tasks in global epoch $GE=N-2$ have finished before the start of global epoch $GE=N$.
 
-consider any task in Epoch N-2,
-The local epoch can either be 0 or 1.
-If le==1,
-The gloabl epoch can move to N-1 only after all lei have been reset to 0. lei is reset to zero only after the task finishes, 
-since the task finishes before GE N-1, it finishes before GE N.
+\STATE Consider any task which started in $GE = N-2$,
 
-If le==0,
-The GE =N-2, le will be set at the begining of GE=N-1.
-le will be reset before GE moves to N.
-le will be reset only after this task finishes.
+\STATE The local epoch $le_i$ can either be 0 or 1.
+\newline
+\STATE If $le_i==1$ :
+\INDSTATE GE can move to $N-1$ only after all $le_i$ have been reset to 0. 
+\INDSTATE $le_i$ is reset to zero only after the task finishes.
+\INDSTATE $\therefore$ the task finishes before $GE=N-1$, it finishes before $GE=N$.
+\newline
+\STATE If $le==0$ :
+\INDSTATE $le_i$ is set when the global epoch progresses to $GE = N-1$.
+\INDSTATE $le_i$ is reset before GE progresses from N-1 to N.
+\INDSTATE $le_i$ can reset only after this task finishes.
+\INDSTATE $\therefore$ the task finishes before $GE=N$.
 \end{algorithmic}
 
 \item \emph{Publication Guarantee:} 
