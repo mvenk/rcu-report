@@ -231,7 +231,6 @@ Resizes the vector to hold n more values, and then inserts x.
 \label{tbl:functionsinvector}
 \end{table}
 
-\pagebreak
 \section{The Problem}
 \label{sec:problem}
 Our goal is to improve lookup performance by allowing for multi-thread
@@ -591,6 +590,7 @@ The tests resulted in segmentation faults and assertion failures, which did not 
 The conflicts in the RadixIPLookup Element occur primarily in two data structures: the vector used to store the routes, and the radix tree which stores a key indexing into the vector. This section describes the conflicts which occur in each of these data structures.\\
 
 \subsubsection{Reader-Updater conflicts in the Vector}
+\label{sec:ruconflictsinthevector}
 We look at reader-updater conflicts which involve read delete races, and discuss their consequences.
 The race conditions are described in the context of the \verb+add_route()+ function which adds a route
 to the radix tree. The way an index is obtained for insertion is
@@ -642,7 +642,7 @@ lookup for IP address A. The reader might receive stale information
 for A. This happens if the reader acquires a reference to the radix
 node containing Route X before the pointer is removed from the
 tree. The race is illustrated with the help of the sequence diagram in
-\ref{race1figure}. However, readers which execute after the updater
+Figure \ref{race1figure}. However, readers which execute after the updater
 has finished will not receive stale data for Route X. These results are acceptable according
 to our correctness requirement specified in \ref{sec:correctness}.
 This is justified by the argument that the reader received
@@ -679,7 +679,7 @@ ultimate price paid is the price of one wrong lookup, which as we said above, is
 \end{lstlisting}
 
 \subsubsection{Verifying conflicts in Click}
-Some of the conflicts mentioned in Section were verified by running Click scripts. Our approach for verifying reader-updater conflicts is the similar to the one mentioned in Section \ref{sec:uuconflicts}. Click elements BashRadixIPLookup, PoundRadixIPLookup repeatedly update the routing table. ReadRadixIPLookup repeatedly performs a route lookup. Table \ref{tbl:ruverify} shows how these elements are used to verify conflicts. ReadRadixIPLookup, PoundRadixIPLookup and BashRadixIPLookup run concurrently on an instance of RadixIPLookup. A and B are the addresses, X and Y are the values of the port. The least-common ancestor of A and B is the root node. Locks are acquired during updates since we want to verify reader-updater conflicts as opposed to updater-updater conflicts. All three of these are run concurrently on the same instance of RadixIPLookup. The race is illustrated with the help of a sequence diagram in Figure \ref{race_readerfigure}.\\
+Some of the conflicts mentioned in Section \ref{sec:ruconflictsinthevector} were verified by running Click scripts. Our approach for verifying reader-updater conflicts is the similar to the one mentioned in Section \ref{sec:uuconflicts}. Click elements BashRadixIPLookup, PoundRadixIPLookup repeatedly update the routing table. ReadRadixIPLookup repeatedly performs a route lookup. Table \ref{tbl:ruverify} shows how these elements are used to verify conflicts. ReadRadixIPLookup, PoundRadixIPLookup and BashRadixIPLookup run concurrently on an instance of RadixIPLookup. A and B are the addresses, X and Y are the values of the port. The least-common ancestor of A and B is the root node. Locks are acquired during updates since we want to verify reader-updater conflicts as opposed to updater-updater conflicts. All three of these are run concurrently on the same instance of RadixIPLookup. The race is illustrated with the help of a sequence diagram in Figure \ref{race_readerfigure}.\\
 
 A thread-safe implementation will have us expect that we always get X or the default route. A default route is returned if there was no prefix matching the route being looked up in the tree. But we see that the lookup sometimes returns Y, which is incorrect.
 
@@ -845,7 +845,7 @@ The \emph{reclaim\_later} list becomes empty and the \emph{reclaim\_now} list ha
 \end{enumerate}
 
 \paragraph{RCU guarantees} 
-For our scheme, we can provide the two RCU guarantees expressed in \cite{urcu}. The \emph{Grace Period Guarantee} says that a given read-side critical section cannot extend beyond both sides of a grace period. The \emph{Publication Guarantee} says that readers will see consistent newer versions of the data structures updated by writers. These guarantees are important since they show that readers always access consistent copies of data structures. 
+We explain how the two RCU guarantees expressed in \cite{urcu} can be achieved with the help of our scheme. The \emph{Grace Period Guarantee} says that a given read-side critical section cannot extend beyond both sides of a grace period. The \emph{Publication Guarantee} says that readers will see consistent newer versions of the data structures updated by writers. These guarantees are important since they show that readers always access consistent copies of data structures. 
 \begin{enumerate}
 \item \emph{Grace-Period Guarantee:} This guarantee states that a given read-side critical section cannot extend beyond both sides of a grace period. We now show that we can maintain this as an invariant in our scheme.
 
@@ -869,7 +869,7 @@ For our scheme, we can provide the two RCU guarantees expressed in \cite{urcu}. 
 \end{algorithmic}
 
 \item \emph{Publication Guarantee:} 
-Although readers proceed concurrently with writers, readers must see either the old version of the data or the newer version. Readers should not see an inconsistent state of the data structure. Readers which begin after an updater has completed should see the newer version. In order to ensure that readers do not see an inconsistent version for RadixIPLookup, variables which reflect the state of the vector such as \verb+_capacity+ and \verb+_n+ are updated only after the pointers are updated. Memory barriers are also used to ensure that these variables reflect their newer values only after memory has been allocated.\\
+Although readers proceed concurrently with writers, readers must see either the old version of the data or the newer version. Readers should not see an inconsistent state of the data structure. Readers which begin after an updater has completed should see the newer version. The update side critical section should ensure that readers see a consistent state of mutable data structures. For example, in order to ensure that readers do not see an inconsistent version in RadixIPLookup, variables which reflect the state of the vector such as \verb+_capacity+ and \verb+_n+ are updated only after the pointers are updated. Memory barriers are also used to ensure that these variables reflect their newer values only after memory has been allocated.\\
 \end{enumerate}
 
 
@@ -1279,7 +1279,7 @@ Multiple efforts have been made at exploiting parallelism in the packet-flow mec
 
 
 Dobrescu et al. \cite{dobrescu} have proposed a technique in which the packet-processing flow and server characteristics are taken as input to formulate an optimization problem. A compiler would then solve this problem and output machine code which will optimize for throughput.
-\pagebreak
+
 \section{Conclusion}
 
 The primary challenges in implementing RCU for Click were to
