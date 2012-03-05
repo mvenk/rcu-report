@@ -1150,7 +1150,7 @@ We see from Figure \ref{img:macro_vr_1w} that RCU scales far better
 than the reader-writer lock. Time taken by the reader-writer lock
 increases linearly with the number of threads. The reader-writer lock
 version is over nine times slower than the RCU version for the
-workload consisting of 7 readers and 1 writer. Figure \ref{img:profile_rwl_locks_vr_1w} shows the number of lock acquisition attempts while using the reader-writer lock on this workload. We can attribute the linear increase in time to the increasing lock contention. RCU does not acquire any locks in this workload. We can clearly see that RCU
+workload consisting of 7 readers and 1 writer. Figure \ref{img:profile_rwl_locks_vr_1w} shows the number of lock acquisition attempts while using the reader-writer lock on this workload. We can attribute the linear increase in time to the increasing lock contention. RCU does not face any lock contention---the updater acquires the lock every time it attempts to do so, since the workload has one updater. We can clearly see that RCU
 outperforms the reader-writer lock for a read intensive workload with some writers.
 
 \subsubsection{Write Intensive Workloads}
