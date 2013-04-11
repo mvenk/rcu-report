@@ -1,0 +1,31 @@
+
+Read-Copy Update Framework for Userlevel Click.
+
+Master's project report files, graphs, images and tex.
+
+Abstract:
+
+High performance routing lookups are critically important for packet forward-
+ing. Routers must perform a lookup for every arriving packet. As line rates exceed
+40Gbps [3], routers are required to perform 125 million lookups a second (as-
+suming a minimum packet size of 40 bytes). Additionally, routers are required to
+perform sophisticated packet processing providing services which support security,
+video and mobility [9]. Software routers are more flexible and extensible for such
+processing when compared to hardware routers. However, software routers are an
+order of magnitude slower than their hardware counterparts [2]. With multi-core
+systems becoming more popular and more prevalent, leveraging them is key to
+improving performance in software routers. However, obtaining a simultaneously
+correct and fast thread safe solution remains challenging. For example, conven-
+tional locking allows only a single thread to access a shared data structure at a
+time. Although this solution is easily correct, it does not take complete advantage
+of the available parallelism, and is evidently slower. Reader-writer locks, which
+allow readers to proceed concurrently with other readers, but not with updaters,
+are faster in comparison, yet slower than non-locking sequential performance.
+We have described an approach for providing thread safety using Read-Copy
+Update (RCU) [10]. RCU is a synchronization technique which scales efficiently
+on read intensive workloads. It has very low read side overhead, allowing readers
+to proceed concurrently with other readers and updaters. A typical router workload
+is read intensive, with 0–5% updates. For such a workload, using a commodity 8
+core machine, we have verified that the performance of the RCU approach is near
+non-locking sequential performance, and is up to 27 times faster than a reader-
+writer lock.
